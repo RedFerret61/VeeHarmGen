@@ -1,5 +1,5 @@
 # VeeHarmGen
-VeeHarmGen adds chords to a melody using style files. It is a **Ve**rtical **Harm**ony **Gen**eration program that 
+VeeHarmGen adds chords to a melody using various pop and jazz chord style files. It is a **Ve**rtical **Harm**ony **Gen**eration program that 
 takes an **input** musicxml file containing a **melody** and 
 creates **output** musicxml files with added **Chord Symbols**.
 These can be played back and edited in scorewriter programs
