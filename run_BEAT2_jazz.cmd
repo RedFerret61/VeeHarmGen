@@ -1,6 +1,6 @@
 @echo off
 echo USAGE: run_BEAT2_jazz mxlfile
-echo        where mxfile.mxl is in input/music e.g. run_BEAT2_jazz music
+echo        where mxlfile.mxl is in input/music e.g. run_BEAT2_jazz music
 echo        Output is in output
 echo Produces harmonic rhythm placeholders and then  
 echo uses "BEAT2" as input for a "jazz" style subset 

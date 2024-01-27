@@ -2,23 +2,19 @@
 # -*- coding: utf-8 -*-
 # create_chord_map.py
 #
-# which given a chorded musicxml file (e.g. song-chorded.mxl) with a song melody stave and text chord symbols,
+# which given a directory containing chorded musicxml file(s) (e.g. song-chorded.mxl) with a song melody stave and text chord symbols,
 # ensures the key is C,
 # calculates the pitch_to_chord mapping
 # writes the json file to input/style/pitch_to_chord
 #
 # free and open-source software, Paul Wardley Davies, see license.txt
 
-# usage: create_chord_maps.py [-h] [-m MXLFILE]
+# usage: create_chord_maps.py [-h] ...
 #
 # optional arguments:
-#   -h, --help            show this help message and exit
-#   -m MXLFILE, --mxlfile MXLFILE
-#                         music file path, relative to current working directory e.g. input\music\chorded\God_Save_The_King-chorded.mxl
-#                         MusicXML files are .mxl for compressed files.
-#                         The MusicXML file must contain a melody with actual text chord symbols:
-#                         In MuseScore, to create a Chord Symbol choose a location by selecting a note or rest and then use the menu option
-#                         Add → Text → Chord Symbol, or use the shortcut Ctrl+K ',
+#   -h, --help            show help message and exits
+# Change History
+# 2024/01/09 change create_chord_map.py so that if no chords then ignore and continue with next file
 
 # standard libraries
 import argparse
@@ -328,7 +324,7 @@ def get_stream(stream1, start_note_offset, end_note_offset):
 
         print('     get_stream(...start_note_offset, end_note_offset)',start_note_offset, end_note_offset,'----get_stream----')
         sub_stream = stream.Stream()
-        for n in stream1.flat:
+        for n in stream1.flatten():
             if type(n) == music21.note.Note or type(n) == music21.note.Rest:
                 if (n.offset >= start_note_offset) and (n.offset < end_note_offset):
                     sub_stream.append(n)
@@ -347,7 +343,7 @@ def stream_has_a_note(a_stream):
     """
     stream_has_note = False
 
-    for n in a_stream.flat:
+    for n in a_stream.flatten():
         if type(n) == music21.note.Note:
             stream_has_note = True
 
@@ -422,12 +418,8 @@ def main():
 
     # Specify command line arguments.
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--mxlfile',
-                        help='music file path, relative to current working directory e.g. input\music\chorded\God_Save_The_King-chorded.mxl '
-                            '(MusicXML files with the extension .mxl are compressed files). '
-                            'The MusicXML file must contain a melody with actual text chord symbols: '
-                            'In MuseScore, to create a Chord Symbol choose a location by selecting a note or rest and then use the menu option '
-                            'Add → Text → Chord Symbol, or use the shortcut Ctrl+K. ',
+    parser.add_argument('-m', '--mxldir',
+                        help='music file path relative to current working directory e.g. private/input/music/placeholder_chords/blues_1/',
                         default='',
                         type=str)
 
@@ -452,125 +444,165 @@ def main():
     # show all args
     print('vars(args)', vars(args))
     # show particular args
-    print("mxlfile fully qualified      :", args.mxlfile)
+    print("mxldir fully qualified      :", args.mxldir)
     print('args.outdir', args.outdir)
     print('args.transpose', args.transpose)
-    # input('Press Enter to continue...')
 
-    # read mxl
-    a_song = music21.converter.parse(args.mxlfile)
-    # a_song.show('text')
+    # need to remove *_normalised.mxl and *_transposed.mxl from mxldir
+    remove_files_ending_with_from_dir('_normalised.mxl', args.mxldir)
+    remove_files_ending_with_from_dir('_transposed.mxl', args.mxldir)
 
-    # if transpose arg supplied then transpose as requested
-    if args.transpose != None:
-        a_song = a_song.transpose(args.transpose)
-        # analyze the key of the transposed input song
-        song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
-        print('args.transpose, song_key.tonic.name, song_key.mode = ',
-              args.transpose, song_key.tonic.name,
-              song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  C major or A minor
+    # for each file ending in .mxl
+    # list the files in the directory
+    for filename in os.listdir(args.mxldir):
+        # if the filename is a file and ending with ends_with
+        if os.path.isfile(os.path.join(args.mxldir, filename)):
+            if filename.endswith(".mxl"):
+                mxlfile = os.path.join(args.mxldir, filename)
+                print('file to process', filename)
+                a_song = music21.converter.parse(mxlfile)
+                # a_song.show('text')
+                # input('Press Enter to continue...')
 
-    else:    # else auto transpose
-        # normalise stream
-        # analyze the key of the input song
-        song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
-        print('Input song raw song_key.tonic.name, song_key.mode = ', song_key.tonic.name,
-              song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  B major or D minor
+                # if transpose arg supplied then transpose as requested
+                if args.transpose != None:
+                    a_song = a_song.transpose(args.transpose)
+                    # analyze the key of the transposed input song
+                    song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
+                    print('args.transpose, song_key.tonic.name, song_key.mode = ',
+                          args.transpose, song_key.tonic.name,
+                          song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  C major or A minor
 
-        if (song_key.tonic.name == 'C' and song_key.mode == 'major') or (
-                song_key.tonic.name == 'A' and song_key.mode == 'minor'):
-            print('No need to normalise as already normal C major or A minor.')
-            song_transpose_interval = 0
-        else:
-            print('Need to normalise to C major or A minor.')
-            # if minor find interval to A
-            if song_key.mode == 'minor':
-                song_transpose_interval = interval.Interval(song_key.tonic, pitch.Pitch('A'))
-            else:  # song is major, find interval to C
-                song_transpose_interval = interval.Interval(song_key.tonic, pitch.Pitch('C'))
-            a_song = a_song.transpose(song_transpose_interval)
+                else:    # else auto transpose
+                    # normalise stream
+                    # analyze the key of the input song
+                    song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
+                    print('Input song raw song_key.tonic.name, song_key.mode = ', song_key.tonic.name,
+                          song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  B major or D minor
 
-        # analyze the key of the transposed input song
-        song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
-        print('Transposed (if required) input song interval song_key.tonic.name, song_key.mode = ',
-              song_transpose_interval, song_key.tonic.name,
-              song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  C major or A minor
+                    if (song_key.tonic.name == 'C' and song_key.mode == 'major') or (
+                            song_key.tonic.name == 'A' and song_key.mode == 'minor'):
+                        print('No need to normalise as already normal C major or A minor.')
+                        song_transpose_interval = 0
+                    else:
+                        print('Need to normalise to C major or A minor.')
+                        # if minor find interval to A
+                        if song_key.mode == 'minor':
+                            song_transpose_interval = interval.Interval(song_key.tonic, pitch.Pitch('A'))
+                        else:  # song is major, find interval to C
+                            song_transpose_interval = interval.Interval(song_key.tonic, pitch.Pitch('C'))
+                        a_song = a_song.transpose(song_transpose_interval)
 
-    # a_song.show('text')
+                    # analyze the key of the transposed input song
+                    song_key = a_song.analyze('key')  # music21 generic algorithm for key finding
+                    print('Transposed (if required) input song interval song_key.tonic.name, song_key.mode = ',
+                          song_transpose_interval, song_key.tonic.name,
+                          song_key.mode)  # # e.g. song_key.tonic.name, song_key.mode =  C major or A minor
 
-    # remove file extension from filename, normalise filename and add file extension
-    mxlfile_basename = os.path.basename(args.mxlfile)
-    mxlfile_normalised_name = os.path.splitext(mxlfile_basename)[0] + '_normalised.mxl'
+                # a_song.show('text')
 
-    # get path without filename e.g.
-    # 1. blank if no path (file in cwd) mxlfile_path               :
-    # 2. if has path                    mxlfile_path               : private/input/music/sectioned
-    mxlfile_path = os.path.dirname(args.mxlfile)
-    # print("mxlfile_path                 :", mxlfile_path)
-    mxlfile_normalised_name_path = os.curdir + os.sep + mxlfile_path + os.sep + mxlfile_normalised_name
-    print("mxlfile_normalised_output      :", mxlfile_normalised_name_path)
+                # remove file extension from filename, normalise filename and add file extension
+                mxlfile_basename = os.path.basename(mxlfile)
+                mxlfile_normalised_name = os.path.splitext(mxlfile_basename)[0] + '_normalised.mxl'
 
-    # write normalised stream
-    a_song.write(fp=mxlfile_normalised_name_path) # write normalised score to musicxml file
+                # get path without filename e.g.
+                # 1. blank if no path (file in cwd) mxlfile_path               :
+                # 2. if has path                    mxlfile_path               : private/input/music/sectioned
+                mxlfile_path = os.path.dirname(mxlfile)
+                # print("mxlfile_path                 :", mxlfile_path)
+                mxlfile_normalised_name_path = os.curdir + os.sep + mxlfile_path + os.sep + mxlfile_normalised_name
+                print("mxlfile_normalised_output      :", mxlfile_normalised_name_path)
 
-    # process the normalised stream
-    # analyze_choice = 'Aarden' # my default and Music21 default is Aarden same as key
-    analyze_choice = 'Krumhansl' # my default as least errors on GSTQ 1 bar (Music21 default is Aarden same as key)
+                # write normalised stream
+                a_song.write(fp=mxlfile_normalised_name_path) # write normalised score to musicxml file
 
-    looking_for_first_chord = True
-    next_note_is_first_chord_offset = False
-    next_note_is_chord_offset = False
-    start_note_offset = 0.0
-    last_note_duration = 0.0
-    pitch_to_chord = {}
+                # process the normalised stream
+                # analyze_choice = 'Aarden' # my default and Music21 default is Aarden same as key
+                analyze_choice = 'Krumhansl' # my default as least errors on GSTQ 1 bar (Music21 default is Aarden same as key)
 
-    # for each stream element in a_song
-    for n in a_song.flat:
-        print('type(n)',type(n))
-        if type(n) == music21.harmony.ChordSymbol or type(n) == music21.harmony.NoChord:
-            if type(n) == music21.harmony.NoChord:
-                print('NoChord', n.figure, n)
-            else:
-                # print('ChordSymbol ', n, n.figure, n.key, 'If writeAsChord False the harmony symbol is written',n.writeAsChord, n.romanNumeral )
-                print('ChordSymbol ', n.figure, n )
-            #     if chord and chord not 'NC' and looking_for_first_chord:
-            if looking_for_first_chord and type(n) != music21.harmony.NoChord:
-                looking_for_first_chord = False
-                next_note_is_first_chord_offset = True
-                chord_1 = n.figure
-                map_chord = chord_1
-            else: # found a later chord
-                # if type(n) != music21.harmony.NoChord:
-                next_note_is_chord_offset = True
-                chord_2 = n.figure
-
-
-        # if type(n) == music21.harmony.NoChord:
-        #     print('NoChord', n.figure, n)
-
-        if type(n) == music21.note.Note:
-            last_note_duration = n.duration.quarterLength
-            print('note offset, name and duration', n.offset, n.nameWithOctave, n.duration.quarterLength)
-            if next_note_is_first_chord_offset:
-                #         get next note
-                #         start_note_offset = note_offset
-                #         looking_for_first_chord = False
-                start_note_offset = n.offset
-                looking_for_first_chord = False
+                looking_for_first_chord = True
                 next_note_is_first_chord_offset = False
-            if next_note_is_chord_offset:
                 next_note_is_chord_offset = False
-                end_note_offset = n.offset
-                shorter_stream = get_stream(a_song, start_note_offset, end_note_offset)
+                start_note_offset = 0.0
+                last_note_duration = 0.0
+                pitch_to_chord = {}
 
-                if stream_has_a_note(shorter_stream) :
-                    # print('ANALYZE_CHOICE =', analyze_choice)
-                    if map_chord != 'N.C.' and map_chord != 'NC':
+                # for each stream element in a_song
+                for n in a_song.flatten():
+                    print('type(n)',type(n))
+                    if type(n) == music21.harmony.ChordSymbol or type(n) == music21.harmony.NoChord:
+                        if type(n) == music21.harmony.NoChord:
+                            print('NoChord', n.figure, n)
+                        else:
+                            # print('ChordSymbol ', n, n.figure, n.key, 'If writeAsChord False the harmony symbol is written',n.writeAsChord, n.romanNumeral )
+                            print('ChordSymbol ', n.figure, n )
+                        #     if chord and chord not 'NC' and looking_for_first_chord:
+                        if looking_for_first_chord and type(n) != music21.harmony.NoChord:
+                            looking_for_first_chord = False
+                            next_note_is_first_chord_offset = True
+                            chord_1 = n.figure
+                            map_chord = chord_1
+                        else: # found a later chord
+                            # if type(n) != music21.harmony.NoChord:
+                            next_note_is_chord_offset = True
+                            chord_2 = n.figure
+
+
+                    # if type(n) == music21.harmony.NoChord:
+                    #     print('NoChord', n.figure, n)
+
+                    if type(n) == music21.note.Note:
+                        last_note_duration = n.duration.quarterLength
+                        print('note offset, name and duration', n.offset, n.nameWithOctave, n.duration.quarterLength)
+                        if next_note_is_first_chord_offset:
+                            #         get next note
+                            #         start_note_offset = note_offset
+                            #         looking_for_first_chord = False
+                            start_note_offset = n.offset
+                            looking_for_first_chord = False
+                            next_note_is_first_chord_offset = False
+                        if next_note_is_chord_offset:
+                            next_note_is_chord_offset = False
+                            end_note_offset = n.offset
+                            shorter_stream = get_stream(a_song, start_note_offset, end_note_offset)
+
+                            if stream_has_a_note(shorter_stream) :
+                                # print('ANALYZE_CHOICE =', analyze_choice)
+                                if map_chord != 'N.C.' and map_chord != 'NC':
+                                    key_chord = get_pitch_classes_in_stream(shorter_stream)
+                                    print('     JSON start_note_offset', start_note_offset, 'end_note_offset', end_note_offset,'key_chord',key_chord,'map_chord',map_chord,'----JSON----')
+                                    # add to json structure
+                                    key = (display_pitch_classes(key_chord))
+                                    print('key', key) # e.g. ('C')
+                                    if key in pitch_to_chord:
+                                        if map_chord in pitch_to_chord[key]:
+                                            pitch_to_chord[key][map_chord] += 1
+                                        else:
+                                            pitch_to_chord[key][map_chord] = 1
+                                    else:
+                                        pitch_to_chord[key] = {map_chord: 1}
+                                map_chord = chord_2
+                                start_note_offset = end_note_offset
+
+                    if type(n) == music21.note.Rest:
+                        print('rest offset and duration', n.offset, n.duration.quarterLength)
+
+                # if no chords then ignore and continue with next file
+                if looking_for_first_chord == True:
+                    print('NO CHORD FOUND IN', mxlfile,'...CONTINUE')
+                    # input('Press Enter to continue...')
+                    continue
+                                   
+                # handle last chord / note(s)
+                if map_chord != 'N.C.' and map_chord != 'NC':
+                    end_note_offset = start_note_offset + last_note_duration
+                    shorter_stream = get_stream(a_song, start_note_offset, end_note_offset)
+                    if stream_has_a_note(shorter_stream) :
                         key_chord = get_pitch_classes_in_stream(shorter_stream)
                         print('     JSON start_note_offset', start_note_offset, 'end_note_offset', end_note_offset,'key_chord',key_chord,'map_chord',map_chord,'----JSON----')
                         # add to json structure
                         key = (display_pitch_classes(key_chord))
-                        print('key', key) # e.g. ('C')
+                        print('key', key)  # e.g. '1000 0000 0000'
                         if key in pitch_to_chord:
                             if map_chord in pitch_to_chord[key]:
                                 pitch_to_chord[key][map_chord] += 1
@@ -578,74 +610,51 @@ def main():
                                 pitch_to_chord[key][map_chord] = 1
                         else:
                             pitch_to_chord[key] = {map_chord: 1}
-                    map_chord = chord_2
-                    start_note_offset = end_note_offset
 
-        if type(n) == music21.note.Rest:
-            print('rest offset and duration', n.offset, n.duration.quarterLength)
+                print('pitch_to_chord with frequency=', pitch_to_chord)  # e.g.
 
-    # handle last chord / note(s)
-    if map_chord != 'N.C.' and map_chord != 'NC':
-        end_note_offset = start_note_offset + last_note_duration
-        shorter_stream = get_stream(a_song, start_note_offset, end_note_offset)
-        if stream_has_a_note(shorter_stream) :
-            key_chord = get_pitch_classes_in_stream(shorter_stream)
-            print('     JSON start_note_offset', start_note_offset, 'end_note_offset', end_note_offset,'key_chord',key_chord,'map_chord',map_chord,'----JSON----')
-            # add to json structure
-            key = (display_pitch_classes(key_chord))
-            print('key', key)  # e.g. '1000 0000 0000'
-            if key in pitch_to_chord:
-                if map_chord in pitch_to_chord[key]:
-                    pitch_to_chord[key][map_chord] += 1
-                else:
-                    pitch_to_chord[key][map_chord] = 1
-            else:
-                pitch_to_chord[key] = {map_chord: 1}
+                # Serializing json
+                json_object = json.dumps(pitch_to_chord, indent=4)
 
-    print('pitch_to_chord with frequency=', pitch_to_chord)  # e.g.
+                # Writing to sample.json
+                # with open("pitch_to_chord.json", "w") as outfile:
+                # output_path = 'input' + os.sep + 'style' + os.sep + 'pitch_to_chord' + os.sep
+                # args.outdir
+                output_path = args.outdir
 
-    # Serializing json
-    json_object = json.dumps(pitch_to_chord, indent=4)
+                # Check whether the specified path exists or not
+                isExist = os.path.exists(output_path)
+                if not isExist:
+                    # Create a new directory because it does not exist
+                    os.makedirs(output_path)
+                    print("The new directory is created!", output_path)
 
-    # Writing to sample.json
-    # with open("pitch_to_chord.json", "w") as outfile:
-    # output_path = 'input' + os.sep + 'style' + os.sep + 'pitch_to_chord' + os.sep
-    # args.outdir
-    output_path = args.outdir
+                output_filename = os.path.splitext(mxlfile_basename)[0] + PITCH_TO_CHORD_PRE_EXTENSION + '.json'
 
-    # Check whether the specified path exists or not
-    isExist = os.path.exists(output_path)
-    if not isExist:
-        # Create a new directory because it does not exist
-        os.makedirs(output_path)
-        print("The new directory is created!", output_path)
+                with open(output_path + output_filename, "w") as outfile:
+                    outfile.write(json_object)
+                print('')
+                print('Output written to',output_path + output_filename)
+                print('create_chord_map.py', CREATE_CHORD_MAP_VERSION)
 
-    output_filename = os.path.splitext(mxlfile_basename)[0] + PITCH_TO_CHORD_PRE_EXTENSION + '.json'
+                #     if chord and chord not 'NC' and not looking_for_first_chord:
+                #         get next note
+                #         end_note_offset = note_offset
+                #         chord_2 = chord
+                #         shorter_stream = get_stream(a_song, start_note_offset, end_note_offset )
+                #         if stream_has_a_note(shorter_stream):
+                #             # print('ANALYZE_CHOICE =', analyze_choice)
+                #             key_chord = shorter_stream.analyze(analyze_choice)
+                #             print('key_chord',key_chord,'map_chord',map_chord)
+                #             # TBD add to json structure
+                #         map_chord = chord_2
+                #         start_note_offset = end_note_offset
+                #
+                # if looking_for_first_chord: exit error no chord found ensure input file has chord symbols
 
-    with open(output_path + output_filename, "w") as outfile:
-        outfile.write(json_object)
-    print('')
-    print('Output written to',output_path + output_filename)
-    print('create_chord_map.py', CREATE_CHORD_MAP_VERSION)
-
-    #     if chord and chord not 'NC' and not looking_for_first_chord:
-    #         get next note
-    #         end_note_offset = note_offset
-    #         chord_2 = chord
-    #         shorter_stream = get_stream(a_song, start_note_offset, end_note_offset )
-    #         if stream_has_a_note(shorter_stream):
-    #             # print('ANALYZE_CHOICE =', analyze_choice)
-    #             key_chord = shorter_stream.analyze(analyze_choice)
-    #             print('key_chord',key_chord,'map_chord',map_chord)
-    #             # TBD add to json structure
-    #         map_chord = chord_2
-    #         start_note_offset = end_note_offset
-    #
-    # if looking_for_first_chord: exit error no chord found ensure input file has chord symbols
-
-    # show graphs
-    # label = 'Input ' + mxlfile_normalised_name
-    # show_histograms(a_song, label)
+                # show graphs
+                # label = 'Input ' + mxlfile_normalised_name
+                # show_histograms(a_song, label)
 
 if __name__ == '__main__':
 

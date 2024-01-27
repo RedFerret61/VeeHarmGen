@@ -40,8 +40,8 @@ from music21 import stream, note, harmony
 from music21.harmony import ChordSymbol, NoChord
 from VeeHarmGen_utilities import *
 
-# VEEHARMGEN_VERSION = '2.0.0'
-__version__ = "2.0.0"
+# VEEHARMGEN_VERSION 
+__version__ = "3.0.0"
 
 # on ubuntu 20.04 default python 3.8.10 (without removesuffix)
 
@@ -87,7 +87,12 @@ class Harmonic_Rhythm(Enum):
     BAR2 = 3
     BAR4 = 4
 
-
+class Harmonic_Rhythm(Enum):
+    BEAT1 = 0
+    BEAT2 = 1
+    BAR1 = 2
+    BAR2 = 3
+    BAR4 = 4
 
 def get_chord(initial_offset, offset_chord, prev_sho_cho):
     """
@@ -123,14 +128,95 @@ def get_chord(initial_offset, offset_chord, prev_sho_cho):
 
     return short_chord
 
+def get_chord_from_pitch_to_chord_by_rank(number, v):
+    """
+    given a pitch_to_chord v and a rank number return the short chord (e.g. Am or C) for the rank number
+    :param number 
+    :param v: a pitch_to_chord : e.g. {'1000 0000 0000': {'C': 2, 'Am7': 1, 'Am': 1}, '0010 0000 0000': {'F': 2, 'G': 1}, '1010 0000 0001': {'G': 1}, '0000 1000 0000': {'C': 1, 'Am': 1}, '0000 1100 0000': {'F': 1}, '1000 0000 0001': {'G': 1}, '1010 1100 0000': {'C': 1}, '0010 1100 0000': {'G': 1}, '1010 1101 0000': {'C': 1}, '0000 0100 0100': {'F': 1}, '0010 1000 0000': {'G': 1}}
+    :return: short_chord e.g. 'E' 
+    """
+    
+    # print('get_chord_from_pitch_to_chord_by_rank(number, v)', number, v) 
+    # print('type(v), v', type(v), v)
+    # sort
+    sorted_v = dict(sorted(v.items(), key=operator.itemgetter(1), reverse=True))
 
-def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, rank):
+    # get count of entries in the dictionary
+    sorted_v_len = len(sorted_v)
+
+    # convert rank to iter_num
+    iter_num = sorted_v_len - math.ceil((number * (sorted_v_len / 100.0)))
+
+    if (iter_num < 0) or (iter_num > sorted_v_len): iter_num = 0    # bug if sorted_v_len = 7 then iter_num = -1
+
+    # access the nth element of dict sorted_v where n is iter_num
+    # but check if a subsequent element with the same frequency has a shorter length use that
+    # i.e. use the simplest chord with the same frequency
+    iter_num_1 = 0
+    for ch1, f1 in sorted_v.items():
+        if iter_num_1 == iter_num:
+            ch = ch1
+            f = f1
+        if iter_num_1 > iter_num:
+            if f1 == f and (len(ch1) < len(ch)):
+                ch = ch1
+        iter_num_1 = iter_num_1 + 1
+
+    print('number, sorted_v_len, iter_num, ch, sorted_v', number, sorted_v_len, iter_num, ch, sorted_v)
+    # print('type(ch), ch, type(f), f', type(ch), ch, type(f), f )
+    # input('Press Enter to continue...')
+    return ch 
+
+
+def get_chord_from_pitch_to_chord_by_nth_outcome(number, v):
+    """
+    given a pitch_to_chord v and a nth_outcome number return the short chord (e.g. Am or C) for the nth_outcome number
+    :param number 
+    :param v: a pitch_to_chord : e.g. {'1000 0000 0000': {'C': 2, 'Am7': 1, 'Am': 1}, '0010 0000 0000': {'F': 2, 'G': 1}, '1010 0000 0001': {'G': 1}, '0000 1000 0000': {'C': 1, 'Am': 1}, '0000 1100 0000': {'F': 1}, '1000 0000 0001': {'G': 1}, '1010 1100 0000': {'C': 1}, '0010 1100 0000': {'G': 1}, '1010 1101 0000': {'C': 1}, '0000 0100 0100': {'F': 1}, '0010 1000 0000': {'G': 1}}
+    :return: short_chord e.g. 'E' 
+    """
+    
+    print('get_chord_from_pitch_to_chord_by_nth_outcome(number, v)', number, v) 
+    # print('type(v), v', type(v), v)
+    # sort
+    sorted_v = dict(sorted(v.items(), key=operator.itemgetter(1), reverse=True))
+
+    # get count of entries in the dictionary
+    sorted_v_len = len(sorted_v)
+    print('sorted_v_len', sorted_v_len)
+
+    # given the the nth_outcome number, determine the iteration number for the dict sorted_v
+    if (number <= 0): iter_num = 0 
+    elif (sorted_v_len == 1): iter_num = 0
+    elif (number < sorted_v_len): iter_num = number
+    # elif (number >= sorted_v_len): iter_num = sorted_v_len % number
+    elif (number >= sorted_v_len): iter_num = number % sorted_v_len
+
+    
+    # access the nth element of dict sorted_v where n is iter_num
+    print('sorted_v', sorted_v)
+    print('iter_num, iter_num + 1', iter_num, iter_num + 1)
+    print('islice(iter(sorted_v), iter_num, iter_num + 1)',islice(iter(sorted_v), iter_num, iter_num + 1))
+    # print('next(islice(iter(sorted_v), iter_num, iter_num + 1))', next(islice(iter(sorted_v), iter_num, iter_num + 1)))
+    ch = next(islice(iter(sorted_v), iter_num, iter_num + 1))
+    print('type(ch), ch', type(ch), ch )
+ 
+    print('number, sorted_v_len, iter_num, ch, sorted_v', number, sorted_v_len, iter_num, ch, sorted_v)
+    # input('Press Enter to continue...')
+    # print('type(ch), ch, type(f), f', type(ch), ch, type(f), f )
+    # input('Press Enter to continue...')
+    
+    # return the chord by nth_outcome
+    return ch 
+    
+def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, chord_choice, number):
     """
     given pitch_class and pitch_to_chord dictionary, return short chord (e.g. Am or C) at offset
     :param pitch_class: e.g. 1000 0000 0000
     :param pitch_to_chord : e.g. {'1000 0000 0000': {'C': 2, 'Am7': 1, 'Am': 1}, '0010 0000 0000': {'F': 2, 'G': 1}, '1010 0000 0001': {'G': 1}, '0000 1000 0000': {'C': 1, 'Am': 1}, '0000 1100 0000': {'F': 1}, '1000 0000 0001': {'G': 1}, '1010 1100 0000': {'C': 1}, '0010 1100 0000': {'G': 1}, '1010 1101 0000': {'C': 1}, '0000 0100 0100': {'F': 1}, '0010 1000 0000': {'G': 1}}
     :param output_filename (used in printed warnings)
-    :param rank e.g. 1-100 where 1 is least frequent and 100 (the default) is the most frequent in the nearest-rank ordered list of possible chords
+    :param chord_choice
+    :param number 
     :return: short_chord e.g. 'E'
     if no chord pitch_class then short_chord = 'NC'
     else
@@ -153,39 +239,18 @@ def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, rank
             print('WARNING Invalid pitch_class so get_nearest_chord_from_pitch_to_chord', pitch_class, 'in', output_filename)
             v = get_nearest_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename)
         if v != None:
-            # print('type(v), v', type(v), v)
-            # sort
-            sorted_v = dict(sorted(v.items(), key=operator.itemgetter(1), reverse=True))
-
-            # get count of entries in the dictionary
-            sorted_v_len = len(sorted_v)
-
-            # convert rank to iter_num
-            iter_num = sorted_v_len - math.ceil((rank * (sorted_v_len / 100.0)))
-
-            if (iter_num < 0) or (iter_num > sorted_v_len): iter_num = 0    # bug if sorted_v_len = 7 then iter_num = -1
-
-            # access the nth element of dict sorted_v where n is iter_num
-            # ch = next(islice(iter(sorted_v), iter_num, iter_num + 1))
-
-            # access the nth element of dict sorted_v where n is iter_num
-            # but check if a subsequent element with the same frequency has a shorter length use that
-            # i.e. use the simplest chord with the same frequency
-            iter_num_1 = 0
-            for ch1, f1 in sorted_v.items():
-                if iter_num_1 == iter_num:
-                    ch = ch1
-                    f = f1
-                if iter_num_1 > iter_num:
-                    if f1 == f and (len(ch1) < len(ch)):
-                        ch = ch1
-                iter_num_1 = iter_num_1 + 1
-
-            print('rank, sorted_v_len, iter_num, ch, sorted_v', rank, sorted_v_len, iter_num, ch, sorted_v)
-
-            # print('type(ch), ch, type(f), f', type(ch), ch, type(f), f )
-            short_chord = ch
-
+            if chord_choice is Chord_Choice.RANK:
+                print('chord_choice is rank')
+                ch = get_chord_from_pitch_to_chord_by_rank(number, v)
+                print('rank ch is', ch)  
+                # input('Press Enter to continue...')
+            if chord_choice is Chord_Choice.NTH_OUTCOME:
+                print('chord_choice is nth_outcome')
+                ch = get_chord_from_pitch_to_chord_by_nth_outcome(number, v)
+                print('nth_outcome ch is', ch)  
+                # input('Press Enter to continue...')
+                
+            short_chord = ch    
             try:
                 test_chord = harmony.ChordSymbol(ch)
             except music21.Music21Exception:
@@ -202,7 +267,7 @@ def get_first_note(a_stream):
     """
     first_note = None
 
-    for n in a_stream.flat:
+    for n in a_stream.flatten():
         if type(n) == music21.note.Note:
             if first_note == None:
                 first_note = n
@@ -216,7 +281,7 @@ def get_last_note(a_stream):
     """
     last_note = None
 
-    for n in a_stream.flat:
+    for n in a_stream.flatten():
         if type(n) == music21.note.Note:
             last_note = n
 
@@ -230,7 +295,7 @@ def stream_has_a_note(a_stream):
     """
     stream_has_note = False
 
-    for n in a_stream.flat:
+    for n in a_stream.flatten():
         if type(n) == music21.note.Note:
             stream_has_note = True
 
@@ -246,7 +311,7 @@ def has_chord_symbols(a_stream):
 
     stream_copy = copy.deepcopy(a_stream)
 
-    for n in stream_copy.flat:
+    for n in stream_copy.flatten():
         if type(n) == music21.harmony.ChordSymbol:
             stream_has_chord_symbol = True
 
@@ -335,7 +400,7 @@ class SongSectionValues:
         :return: stream
         """
         sub_stream = stream.Stream()
-        for n in self.stream1.flat:
+        for n in self.stream1.flatten():
             if type(n) == music21.note.Note or type(n) == music21.note.Rest:
                 if (n.offset >= start_note_offset) and (n.offset < end_note_offset):
                     sub_stream.append(n)
@@ -481,7 +546,7 @@ class SongSectionValues:
         offset_end = 0.0
         stream_copy = copy.deepcopy(a_stream)
 
-        for n in stream_copy.flat:
+        for n in stream_copy.flatten():
             # print('type(n) ', type(n) )
             if type(n) == music21.clef.TrebleClef:
                 print('music21.clef.TrebleClef')
@@ -494,7 +559,7 @@ class SongSectionValues:
                 # print('music21.key.KeySignature', song.tonic.name, song.mode)
                 print('music21.key.KeySignature', self.stream1.keySignature)  # None
                 first = True
-                for sKS in a_stream.flat.getElementsByClass('KeySignature'):
+                for sKS in a_stream.flatten().getElementsByClass('KeySignature'):
                     if first:
                         a_stream.KeySignature = sKS
                         print('First KeySignature:', a_stream.KeySignature)  # e.g. <music21.key.KeySignature of 1 flat>
@@ -735,7 +800,7 @@ class SongSectionValues:
 
 
         # for each stream element in a_song
-        for n in self.song_stream.flat:
+        for n in self.song_stream.flatten():
             # print('type(n)',type(n))
             if type(n) == music21.harmony.ChordSymbol or type(n) == music21.harmony.NoChord:
                 if type(n) == music21.harmony.NoChord:
@@ -1229,7 +1294,7 @@ class SongSectionValues:
         the_offset = 0.0
 
         # for each element
-        for n in SongSectionValues.song_stream.flat:
+        for n in SongSectionValues.song_stream.flatten():
             # if not note:
             if type(n) != music21.note.Note and type(n) != music21.note.Rest:
                 # copy to output stream
@@ -1283,7 +1348,7 @@ class SongSectionValues:
         pass
 
 
-    def write_placeholder_chords(self, pitch_to_chord, output_filename, rank):
+    def write_placeholder_chords(self, pitch_to_chord, output_filename, chord_choice, number):
         """
         Write melody with chords to output_filename mxl.
         Chords mapped using offsets in SongSectionValues.song_offset_placeholder_chords
@@ -1291,6 +1356,8 @@ class SongSectionValues:
 
         :param pitch_to_chord dictionary
         :param output_filename: e.g. my.mxl
+        :param chord_choice
+        :param number
         :return: void
 
         Given:
@@ -1315,10 +1382,10 @@ class SongSectionValues:
         write output stream
         """
 
-        print('write_placeholder_chords()')
+        print('write_placeholder_chords(self, pitch_to_chord, output_filename, chord_choice, number)', pitch_to_chord, output_filename, chord_choice, number)
+        # input('Press Enter to continue...')
         # print('song_offset_placeholder_chords', SongSectionValues.song_offset_placeholder_chords)
         # print('pitch_to_chord', pitch_to_chord)
-        print('output_filename',output_filename)
 
         score = stream.Score()
         p0 = stream.Part()
@@ -1337,7 +1404,7 @@ class SongSectionValues:
         # input('Press Enter to continue...')
 
         # for each element
-        for n in SongSectionValues.song_stream.flat:
+        for n in SongSectionValues.song_stream.flatten():
             # if not note:
             if type(n) != music21.note.Note and type(n) != music21.note.Rest:
                 # copy all non-note types to output stream (unless instrument, ChordSymbol or TextBox)
@@ -1357,7 +1424,7 @@ class SongSectionValues:
                 #         if n.offset >= next_chord_offset:
                 if n.offset >= next_chord_offset:
                     print('n.offset >= next_chord_offset',  n.offset, next_chord_offset)
-                    sho_cho = get_chord_for_pitch_class(next_pitch_class, pitch_to_chord, output_filename, rank)
+                    sho_cho = get_chord_for_pitch_class(next_pitch_class, pitch_to_chord, output_filename, chord_choice, number)
                     # append chord
                     if sho_cho == 'NC':
                         p0.append(NoChord())
@@ -1407,7 +1474,7 @@ def has_section(a_song):
     result = False
 
     # for each element in stream
-    for n in a_song.flat:
+    for n in a_song.flatten():
         if type(n) == music21.expressions.TextExpression:
             if is_section(n.content):
                 print('has_section',n.content)
@@ -2462,7 +2529,7 @@ def add_TextExpression(input_song):
     output_song = stream.Score()
     p0 = stream.Part()
 
-    for n in input_song.flat:
+    for n in input_song.flatten():
         # if not note:
         if type(n) != music21.note.Note and type(n) != music21.note.Rest:
                 p0.append(n)
@@ -2493,7 +2560,7 @@ def get_offset_section(input_song):
     offset_section = {}
     the_offset = 0.0
 
-    for n in input_song.flat:
+    for n in input_song.flatten():
         if type(n) == music21.expressions.TextExpression:
             if is_section(n.content):
                 # print('the_offset, TextExpression =', the_offset, n.content)
@@ -2527,7 +2594,7 @@ def normalise_song(input_song, input_filename):
     p0.insert(0, the_instrument)
 
     # for each element
-    for n in input_song.flat:
+    for n in input_song.flatten():
         # if not note:
         if type(n) != music21.note.Note and type(n) != music21.note.Rest:
             # copy to output stream unless instrument
@@ -2556,7 +2623,7 @@ def get_accidental_count(a_song):
 
     a_song.makeAccidentals(inPlace=True)
 
-    for n in a_song.flat:
+    for n in a_song.flatten():
         # if note update acc_count
         if type(n) == music21.note.Note:
             if n.pitch.accidental != None:
@@ -2575,7 +2642,7 @@ def get_key_signature(a_stream):
     """
     # print('get_key_signature()')
     first_KS = None
-    # for n in a_stream.flat:
+    # for n in a_stream.flatten():
     for n in a_stream:
         if type(n) == music21.key.KeySignature:
             # print('music21.key.KeySignature', song.tonic.name, song.mode)
@@ -2583,7 +2650,7 @@ def get_key_signature(a_stream):
 
             # print('music21.key.KeySignature', n)
             first = True
-            for sKS in a_stream.flat.getElementsByClass('KeySignature'):
+            for sKS in a_stream.flatten().getElementsByClass('KeySignature'):
                 if first:
                     a_stream.KeySignature = sKS
                     # first_KS = sKS
@@ -2637,7 +2704,7 @@ def get_first_instrument(a_stream):
     """
     first_inst = None
     # for each element
-    for n in a_stream.flat:
+    for n in a_stream.flatten():
         # if not note:
         if type(n) != music21.note.Note and type(n) != music21.note.Rest:
             if issubclass(n.__class__, music21.instrument.Instrument):
@@ -2711,7 +2778,7 @@ def get_transpose_information(stream_title, a_stream):
 #     p0.insert(0, the_instrument)
 #
 #     # for each element
-#     for n in input_song.flat:
+#     for n in input_song.flatten():
 #         # if not note:
 #         if type(n) != music21.note.Note and type(n) != music21.note.Rest:
 #             # copy to output stream unless instrument
@@ -2729,7 +2796,7 @@ def get_transpose_information(stream_title, a_stream):
 #     output_song.insert(0, p0)
 #     return output_song
 
-def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basename, rank, style ):
+def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basename, chord_choice, number, style ):
     """
     given a_song with a melody and placeholder chords,
     populate song_offset_placeholder_chords with offset and pitch classes in melody key e.g.
@@ -2741,8 +2808,11 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
     :param song_key:
     :param instrument:
     :param mxlfile_basename:
+    :param chord_choice:
+    :param number:
     """
-    print('generate_from_placeholder_chords', a_song, song_key, instrument, mxlfile_basename,  rank, style)
+    print('generate_from_placeholder_chords', a_song, song_key, instrument, mxlfile_basename,  chord_choice, number, style)
+    # input('Press Enter to continue...')
 
     found_time_signature = False
     # first_section_found = False
@@ -2763,7 +2833,7 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
     first_TimeSig = True
 
     # for each element in stream
-    for n in song_section_values.song_stream.flat:
+    for n in song_section_values.song_stream.flatten():
         if type(n) == music21.meter.TimeSignature:
             if first_TimeSig:
                 song_section_values.set_time_sig(n)
@@ -2826,12 +2896,12 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
             #         os.path.splitext(pitch_to_chord_file)[0]) + '-R' + str(rank) + '-' + dt + '.mxl'
             # remove -_-ptc from output filename
             output_filename = output_filename + '-' + str(
-                    os.path.splitext(pitch_to_chord_file)[0]).replace('-_-ptc', '') + '-R' + str(rank) + '.mxl'
-
-            # print('output_filename', output_filename)
+                    os.path.splitext(pitch_to_chord_file)[0]).replace('-_-ptc', '') + '-' + str(chord_choice) + '-' + str(number) + '.mxl'
+            print('output_filename', output_filename)
+            # input('Press Enter to continue...')
             pitch_to_chord = load_json(input_pitch_to_chord_fully_qualified)
             # print('pitch_to_chord', pitch_to_chord)
-            song_section_values.write_placeholder_chords(pitch_to_chord, output_filename, rank)
+            song_section_values.write_placeholder_chords(pitch_to_chord, output_filename, chord_choice, number)
             print('')
     return None
 
@@ -2878,6 +2948,20 @@ def main():
     #                    default=False,
     #                    action=argparse.BooleanOptionalAction)
 
+    parser.add_argument('-c','--chord_choice', 
+                        help='chord_choice may be rank which uses a nearest-rank ordered list of possible chords '
+                            'or nth_outcome where number is the number of outcomes away from the most popular outcome, ',
+                        default= 'rank',
+                        type=Chord_Choice, choices=list(Chord_Choice))  
+                        
+    parser.add_argument('-n','--number',
+                        help='number used with the chord_choice e.g. '
+                            'if chord_choice is rank then number 1 is least frequent and 100 is the most frequent in the nearest-rank ordered list of possible chords, '
+                            'if chord_choice is nth_outcome then number is outcomes away from the most popular outcome. ',
+                        default= 100,
+                        type=int, 
+                        choices=range(0, 101))                          
+                    
     parser.add_argument('-d','--demo',
                         help='demonstrate some different commonly used chords and harmonic rhythms.',
                         default=False)
@@ -2889,7 +2973,7 @@ def main():
                             'Dulcimer, "Electric Bass", "Electric Guitar", "Electric Piano", "English Horn", Flute, Glockenspiel, Guitar, Harmonica, Harp, Kalimba, Koto, Lute, Marimba, Oboe, Ocarina, "Pan Flute", Piccolo, Recorder, "Reed Organ", Saxophone, '
                             'Shamisen, Sitar, Soprano, "Soprano Saxophone", Tenor, "Tenor Saxophone", Timpani, Trombone, Trumpet, Tuba, "Tubular Bells", Ukulele, Vibraphone, Violin, Violoncello, Voice, Xylophone',
                         default='Piano',
-                        type=str)
+                        type=str)                               
     
     parser.add_argument('-o','--offsets',
                         nargs=5,
@@ -2898,13 +2982,8 @@ def main():
                         default=None,
                         type=float)
 
-    parser.add_argument('-r','--rank',
-                        help='rank 1-100 where 1 is least frequent and 100 (the default) is the most frequent in the nearest-rank ordered list of possible chords',
-                        default= 100,
-                        type=int, choices=range(1, 100))
-
     parser.add_argument('-s','--style',
-                        help='style filter string e.g. -s jazz only includes style names containing the string jazz',
+                        help='style filter string on files in input/style directory e.g. -s jazz only includes style names containing the string jazz',
                         default='ptc',
                         type=str)
 
@@ -2916,11 +2995,9 @@ def main():
     parser.add_argument('-v','--version', action='version',
                         version='%(prog)s {version}'.format(version=__version__))
 
-    # print the help message only if no arguments are supplied on the command line
-    # if len(sys.argv) == 1:
-    #     parser.print_help(sys.stderr)
-    #     sys.exit(1)
 
+                      
+                        
     # Parse command line arguments.
     args = parser.parse_args()
     print('')
@@ -2936,10 +3013,13 @@ def main():
     # show all args
     print('vars(args)', vars(args))
     # show demo args
+    print('args.chord_choice', args.chord_choice)
+    print('args.number', args.number)
     print('args.demo', args.demo)
-    print('args.rank', args.rank)
+    # print('args.nth_outcome', args.nth_outcome)
+    # print('args.rank', args.rank)
     print('args.style', args.style)
-
+               
     # input('Press Enter to continue...')
 
     args.analyze = 'all'
@@ -3025,7 +3105,7 @@ def main():
             print('        input music has placeholder chords ......................................................................')
             print('')
 
-            generate_from_placeholder_chords(a_song, song_key, args.instrument, mxlfile_basename, args.rank, args.style)
+            generate_from_placeholder_chords(a_song, song_key, args.instrument, mxlfile_basename, args.chord_choice, args.number, args.style)
 
         else: # not has_chord_symbols
 
@@ -3046,7 +3126,7 @@ def main():
             song_section_values.set_instrument(args.instrument)
             print('song_section_values.analyze_choice', song_section_values.analyze_choice)
             # for each element in stream
-            for n in a_song.flat:
+            for n in a_song.flatten():
 
                 if type(n) == music21.meter.TimeSignature:
                     if first_TimeSig:
@@ -3193,7 +3273,7 @@ def main():
             song_section_values.set_instrument(args.instrument)
             print('song_section_values.analyze_choice',song_section_values.analyze_choice)
             # for each element in stream
-            for n in a_song.flat:
+            for n in a_song.flatten():
 
                 if type(n) == music21.meter.TimeSignature:
                     if first_TimeSig:

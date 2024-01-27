@@ -8,7 +8,10 @@
 
 import json
 import music21
+import os
+import sys
 
+from enum import Enum
 from music21 import *
 
 INPUT_STYLE_PATH = 'input/style/'
@@ -19,7 +22,13 @@ JSON_EXTENSION = '.json'
 PITCH_TO_CHORD_FILENAME_ENDING = PITCH_TO_CHORD_PRE_EXTENSION + JSON_EXTENSION
 # MIN_PITCH_CLASSES_PER_SLICE = 3
 
-
+class Chord_Choice(Enum):
+    RANK = 'rank'
+    NTH_OUTCOME = 'nth_outcome'
+    
+    def __str__(self):
+        return self.value
+        
 def calculate_pitch_class_match(pc1, pc2):
     """
     given two pitch_classes
@@ -254,3 +263,31 @@ def load_json(fully_qualified_filename):
 #     return returnObj
 #
 #
+
+def remove_files_ending_with_from_dir(ends_with, from_dir):
+    """
+    delete files that end with a string from a directory
+    :param ends_with: string the file ends with
+    :param from_dir: the path to the files
+    :return: void
+    """
+    print('remove_files_ending_with_from_dir', ends_with, from_dir)
+
+    # check ends_with not blank
+    if ends_with == '':
+        print('remove_files_ending_with_from_dir exit: ends_with blank')
+        sys.exit()
+    # Check whether the specified path exists or not
+    isExist = os.path.exists(from_dir)
+    if not isExist:
+        print('remove_files_ending_with_from_dir exit: path does not exist')
+        sys.exit()
+    # list the files in the directory
+    for filename in os.listdir(from_dir):
+        # if the filename is a file and ending with ends_with
+        if os.path.isfile(os.path.join(from_dir, filename)):
+            if filename.endswith(ends_with):
+                print('Deleting', filename)
+                os.remove(os.path.join(from_dir, filename))
+
+    return

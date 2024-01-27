@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo USAGE: ./run_BAR2_folk.sh mxlfile
-echo        where mxfile.mxl is in input/music e.g. ./run_BAR2_folk.sh music
+echo        where mxlfile.mxl is in input/music e.g. ./run_BAR2_folk.sh music
 echo        Output is in output
 echo Produces harmonic rhythm placeholders and then  
 echo uses "BAR2" as input for a "folk" style subset 

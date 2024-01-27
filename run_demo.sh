@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo USAGE: ./run_demo.sh mxlfile
-echo        where mxfile.mxl is in input/music e.g. ./run_demo.sh music
+echo        where mxlfile.mxl is in input/music e.g. ./run_demo.sh music
 echo        Output is in output
 echo Produces demonstration chord type files for each harmonic rhythm.
 

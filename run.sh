@@ -1,7 +1,7 @@
 #!/bin/bash
 
 echo USAGE: ./run.sh mxlfile
-echo        where mxfile.mxl is in input/music e.g. ./run.sh music
+echo        where mxlfile.mxl is in input/music e.g. ./run.sh music
 echo        Output is in output
 echo Produces harmonic rhythm placeholders and styles for the one measure harmonic rhythm.
 

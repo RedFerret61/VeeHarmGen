@@ -1,45 +1,54 @@
-# VeeHarmGen
-VeeHarmGen adds chords to a melody using various pop and jazz chord style files. It is a **Ve**rtical **Harm**ony **Gen**eration program that 
-takes an **input** musicxml file containing a **melody** and 
-creates **output** musicxml files with added **Chord Symbols**.
+# VeeHarmGen 3.0.0
+VeeHarmGen adds chords to a melody using various pop, jazz and classical chord style files. It is a **Ve**rtical **Harm**ony **Gen**eration program that 
+takes an **input** musicxml file containing a **melody** and placeholder chord symbols (temporary chords that give a harmonic rhythm) and
+creates **output** musicxml files with more elaborate or (hopefully) fitting **Chord Symbols**.
 These can be played back and edited in scorewriter programs
 such as MuseScore 3.6.2.
 
-There is a VeeHarmGen demonstration video on youtube: https://www.youtube.com/watch?v=3fv-eC-yg7I
+There is a VeeHarmGen 3 demonstration video on youtube: https://youtu.be/Be0aRNpcL7k 
+There is a VeeHarmGen 2 demonstration video on youtube: https://www.youtube.com/watch?v=3fv-eC-yg7I
 
 [![Add chords to a melody using styles in VeeHarmGen 2](assets/images/youtube1.png)](https://www.youtube.com/watch?v=3fv-eC-yg7I "Add chords to a melody using styles in VeeHarmGen 2")
 
 The latest release has been tested on: 
-* Windows 10.0.19044 with 
-  - MuseScore 3.6.2,    Python 3.10.8,  music21 v 8.1.0 
-* macOS Ventura 13.1 with
-  - MuseScore 3.6.2,    Python 3.9.6,   music21 v 8.1.0
-* Ubuntu 20.04 with 
-  - MuseScore 3.2.3,    Python 3.8.10,  music21 v 8.1.0
+- Windows 10 Version 22H2 build 19045.3930 with 
+  - MuseScore 3.6.2,    Python 3.12.1,  music21 v 9.1.0 
+- macOS Monterey 12.01 with
+  - MuseScore 3.6.2,    Python 3.11.4,   music21 v 9.1.0
+- Ubuntu 22.04.3 LTS with 
+  - MuseScore 3.2.3,    Python 3.10.12,  music21 v 9.1.0
 
 Note: MuseScore 4.0.2 has chord symbol display bug, Format Style, Chord Symbols, toggle to Jazz then back to standard.
 
 **Table of Contents**
 
-1. [QuickStart](#QuickStart)
-2. [Introduction](#Introduction)
-3. [Prerequisites](#Prerequisites)
-4. [WindowsInstall](#WindowsInstall)
-5. [macOSInstall](#macOSInstall)
-6. [UbuntuInstall](#UbuntuInstall)
-7. [Input_Music](#Input_Music)
-8. [Output](#Output)
-9. [ToolsForStyleCreation](#ToolsForStyleCreation)
+- [Changes](#Changes)
+- [QuickStart](#QuickStart)
+- [Introduction](#Introduction)
+- [StylesEvaluation](#StylesEvaluation)
+- [Prerequisites](#Prerequisites)
+- [WindowsInstall](#WindowsInstall)
+- [macOSInstall](#macOSInstall)
+- [UbuntuInstall](#UbuntuInstall)
+- [Input_Music](#Input_Music)
+- [Output](#Output)
+- [ToolsForStyleCreation](#ToolsForStyleCreation)
 
 *Note: GitHub has a full table of contents with links in the header icon (top left of the readme.md).*
 
 ---
+## Changes
+
+- v3.0.0 2024. Add more chord styles, style evaluation in Introduction and a chord_choice of nth_outcome away from the most popular chord outcome.
+- v2.0.0 2023. Add chord styles and a chord_choice of rank which uses a nearest-rank ordered list of possible chords.
+- v1.0.0 2022. Initial version uses key analysis on input music melody slices to produce chords.
+
 ## QuickStart
 
 Assuming you have:
-* the pre-requisites (MuseScore, Python, and Music21)
-* performed the VeeHarmGen install for your platform
-* a music.mxl file in the input/music directory with a single stave monophonic melody, e.g.
+- the pre-requisites (MuseScore, Python, and Music21)
+- performed the VeeHarmGen install for your platform
+- a music.mxl file in the input/music directory with a single stave monophonic melody, e.g.
 
 ![e.g. Music](assets/images/music.png)
 
@@ -55,7 +64,7 @@ Start explorer, goto the output folder under VeeHarmGen, double click on a .mxl 
 Start a terminal
 
     cd ~/VeeHarmGen
-    chmod a+x run*
+    chmod a+x *.sh
     
     ./run.sh music
 
@@ -79,12 +88,12 @@ creates output musicxml files with added Chord Symbols.
 
 VeeHarmGen expects two types of input files : 
 
-* tunes **without sections** where the generated harmonic rhythm (beats or bars per chord ) will be continous throughout the song.
+- tunes **without sections** where the generated harmonic rhythm (beats or bars per chord ) will be continous throughout the song.
 For example music with a generated 2 bar harmonic rhythm:
 
 ![e.g. Music](assets/images/music-BAR2.png)
 
-* tunes **with sections** (from MarkMelGen https://github.com/RedFerret61/MarkMelGen ) where the generated harmonic rhythm will restart on each section (denoted by staff text to identify the section start point: 
+- tunes **with sections** (from MarkMelGen https://github.com/RedFerret61/MarkMelGen ) where the generated harmonic rhythm will restart on each section (denoted by staff text to identify the section start point: 
                 intro, verse, prechorus, chorus, solo, bridge or outro). For example 
 the previous section to the PRECHORUS ends with a 1 bar chord, and the PRECHORUS restarts the 2 bar chord rhythm.
 
@@ -105,37 +114,75 @@ By default output is generated for all styles.
 The -s STYLE option can be used to filter the generated output e.g. -s jazz only includes style names containing the string jazz.
 See VeeHarmGen/input/style for the set of styles and "all" superset styles.
 
-    all-_-ptc.json
-    all_jazz-_-ptc.json
-    all_non_jazz-_-ptc.json
-    all_rock_pop_0-_-ptc.json
-    all_rock_pop_1-_-ptc.json
-    blues_1-_-ptc.json
-    country_rock_1-_-ptc.json
-    country_rock_2-_-ptc.json
-    early_jazz_1-_-ptc.json
-    early_jazz_2-_-ptc.json
-    easy_listening_1-_-ptc.json
-    folk_1-_-ptc.json
-    folk_rock_1-_-ptc.json
-    glam_rock_1-_-ptc.json
-    indie_rock_1-_-ptc.json
-    jazz_related_1-_-ptc.json
-    jazz_rock_1-_-ptc.json
-    jazz_standard_1-_-ptc.json
-    modern_jazz_1-_-ptc.json
-    new_wave_1-_-ptc.json
-    pop_1-_-ptc.json
-    pop_country_1-_-ptc.json
-    rock_pop_0_4-_-ptc.json
-    rock_pop_0_5-_-ptc.json
-    rock_pop_0_7-_-ptc.json
-    rock_pop_1_4-_-ptc.json
-    rock_pop_1_5-_-ptc.json
-    rock_pop_1_7-_-ptc.json
-    rock_pop_1_9-_-ptc.json
-    show_tune_1-_-ptc.json
-    soul_1-_-ptc.json
+VeeHarmGen version 3 added more chord styles (Classical, Film and Game), a style evaluation (see below)
+ and a chord_choice of nth_outcome away from the most popular chord outcome and a run_out script to use it e.g.
+    
+    run_out
+       USAGE: run_out n style instrument mxlfile
+       where n is the last outcome (outcomes start at 0)
+             style is a style filter string on files in input/style directory
+             instrument is used by the output melody (chords are Piano), for instruments, see python VeeHarmGen.py -h
+             mxlfile has placeholder chords and includes path
+       Output for chord outcomes is in written to the output directory
+       Examples:
+       run_out 1 _pop_ Harmonica input/music/placeholder_chords/Cairo-PC.mxl
+	   run_out 2 pop_country_1 Violin input/music/placeholder_chords/Cairo-PC.mxl
+       run_out 3 all_contemporary Piano input/music/placeholder_chords/Cairo-PC.mxl
+
+## StylesEvaluation 
+	
+| - | - | - |
+|---|---|---|
+| STYLE NAME						| | EVALUATION 	|
+| all								| | : All the styles. 	|
+| - | - | - |
+| all_classical						| | : All the styles with "classical" in the name. 	|
+| all_contemporary					| | : All the styles that are not jazz or classical and are relatively recent. 	|
+| all_film							| | : All the styles with "film" in the name. 	|
+| all_game							| | : All the styles with "game" in the name. 	|
+| all_jazz							| | : All the styles with "jazz" in the name. 	|
+| all_traditional					| | : All the styles that are not in the above style composite subsets.	|
+| - | - | - |
+| blues_1								| | : Traditional, pleasing, serious, sad, with occasional modal mixture, some sus2 / sus4 / 6 / 7. 	|
+| classical_baroque_7			| | : Sophisticated elegant solemn graceful complexity, mainly triadic, passing chromatic / dissonnant bass notes,  secondary dominants (In C, the dominant chord is G7, a secondary dominant would be A7 that resolves to a non-tonic), some modulation, dim / 7 / 6.  |
+| classical_classical_2			| | : Predominantly triadic, unexpectedly beautiful cadences, surprise chords that resolve, sparing use of chromatic harmony (notes that do not belong to key). |
+| classical_modern_1			| | : Audacious, colorful, dreamlike, evocative, floating (suspended bass) sometimes diminished triads or chromatic passing tones,  ambiguities and parallels, dim / 4 / 7.  |
+| classical_renaissance_9   	| | : Dramatic, emotional, triads with chromatic alterations (notes not in scale), dissonance, modulation, modes, figured bass.  |
+| classical_romantic_1			| | : Bold, innovative, mostly triads, many secondary dominants (resolve to a non-tonic), secondary leading tones (chromatics resolve to dominant), more chromaticism and dissonance than before, modulation, occasional sus / dim7 / dissonnant bass.  |
+| classical_romantic_2			| | : Elegant, textured, Polish folk,  triads with chromaticism, extended chords (more than three notes), some 6, 7(b5)(sus), (b)9(#3), dim. |
+| classical_romantic_5			| | : Complex, Russian folk, triads, chromatic dissonance, some sus2 / sus4 / 6 / (maj)7(b5) / dim. |
+| country_rock_1						| | : Simple traditional American folk, with some jazz and blues, modulations, some sus2 / sus4 / 7. |
+| country_rock_2						| | : Country folk rock & blues influences, extended chords (more than three notes), occasional baroque dissonance, some sus2 /sus4 / 6 / 7(m7add11) / 9.  |
+| early_jazz_1						| | : Simple, emotional, African American, primarily triads, occasional chromatic dissonance, non-diatonic substitution (different key), higher than average chord complexity and chord-bass melody, some sus4 / 7.  |
+| early_jazz_2						| | : Blues, ragtime, non-diatonic chord substitutions, some aug / 6 / 7(b5)(add13) / 9 (add13). |
+| easy_listening_1						| | : Lush, romantic, chromaticism, secondary dominants (chords built on the fifth of another chord), modal interchange (borrowing chords from other modes within the same key), some 6 / 7 (b5) (b9) / 9 (sus4) / dim (7). |
+| film_1								| | :  Multifaceted, Tonal Foundation, Rich and Vibrant Harmony,  chromaticism, secondary dominants, and altered dominants (modifies diatonic note(s) to chromatic, e.g. ♭5, ♯5, ♭9, and ♯9),  blend of simplicity and sophistication, tonality and chromaticism, some sus2, sus (add 7) / (dim) 7 / 9 . |
+| film_2								| | :  Multifaceted and captivating, layers simple and complex chords, unconventional voicings and extended harmonies, dissonant chords, chromaticism, and altered dominants, suspended chords, some sus2 / sus / dim / 7 / 9. |
+| film_3								| | :  Multifaceted, Tonal Ambiguity, blurs the lines between major and minor tonalities, modal shifts, chromaticism, unconventional voicings, extensions, minor second interval progressions, augmented chords, and open-fifth voicings, some sus2 / sus / dim / power / 6 / 7 / 9. |
+| folk_1								| | : Mostly simple, diatonic chord progressions, later chromaticism, modal interchange, and secondary dominants, some surprising bass, sus4, 7 / 9. |
+| folk_rock_1							| | :  Modal harmony and folk-inspired chords, such as IV-V-I (resolution) and vi-IV-I (melancholy) progressions, extended chords and non-diatonic chords, some sus2 / 6 / 7 (#3)(#5) / 9 / 11 / dim.|
+| games_1								| | : Multifaceted and adaptable, tonal with chromaticism, secondary dominants, and altered dominants to build tension and suspense, while major seventh chords and sus4 chords add warmth and hope, some sus2 / sus / dim / 7 / 9 / 11. |
+| games_2								| | : Primarily tonal, subtle chromaticism, modal shifts, altered dominants, some sus2 / sus / dim / 7 / 9 / 11. |
+| glam_rock_1							| | : Relatively “classical” rock, pop, and gospel, often shifting between major and minor keys, slash chords (bass note from a different chord), chromatic passing chords, some sus4, 7. |
+| indie_rock_1							| | : Sourced from 60s British pop, punk rock, and even classical music, used minor chords for a melancholic and introspective atmosphere, or dramatic shifts from minor to major, some Modal Interchange for tension and release (borrowing chords from the parallel major or modal scales), some sus / 6 / 7 / 9.|
+| jazz_related_1					| | : Blues Influenced, with jazz traditions, Chromatic Harmony (secondary dominant, and substitution chords), some sus / 6 / (many) (aug) (dim) 7 (#5) (b5) (b9) / 9 (sus4) / 13 /aug / dim. | 
+| jazz_rock_1						| | : Diverse, multifaceted blend of jazz, rock, pop, Latin and world, extended chords, altered dominants, chromaticism, some sus2 / sus / 7 (b5) (#9) (aug) / 9 / 11 / 13.   |
+| jazz_standard_1					| | : Lush, romantic, and sophisticated chords, primarily traditional tonal harmony, extended Chords and Alterations such as dominant sevenths with altered tensions, Jazz Influences, chromatic passing tones, Latin bossa nova chords, samba rhythms, exotic scales, some 6 / 7 (b5) (b9) (#11) / 9. |
+| modern_jazz_1						| | : Initial bebop harmony, then Modal Harmony particularly Dorian (e.g. piano keyboard's white notes from D to D) and Phrygian mode (e.g. piano keyboard's white notes from E to E), and avant-garde Bitonality and Polytonality (simultaneously superimposing two or more keys on top of each other), Chromaticism and Altered Dominants, passing tones, tension and release, some 6 / 7 (b5) (#5) (#9) (#11) (b13) / 9 / 13 / dim. |
+| new_wave_1							| | : Power chords, major and minor progressions, pentatonic scales, extended chords, altered dominants, chromaticism, some power / sus2 / sus4 / 7 (sus4). |
+| popular_1								| | : Simplicity, mainly Major chords (I-IV-V) with diatonicism (that avoids chromaticism with notes outside the scale), higher complexity than average in terms of Chord-Bass Melody, possible secondary dominants (that temporarily shift the key to create tension and resolve back to the main key), occasional borrowed chords (such as a minor chord from the parallel minor key, e.g. the parallel minor of C Major is C minor) some sus2 / sus4 / 6 / 7 / 9 / dim . |
+| pop_country_1							| | : Pop and country use of major and minor progressions, sophisticated and elegant extended chords, altered dominants, chromaticism, lush jazz-influenced voicings, power chords some sus2 / sus4 / 7 / 9 .|
+| reggae_1								| | : Emphasis on minor chords, particularly I-V-vi, using the blues scale and its associated chords (creates a warm, mellow soundscape), suspended chords delay the resolution of the harmony (creating a sense of yearning and emotional pull), dominant 7ths and major 7ths provide a jazzier feel, occasional borrowed chords or modal interchange (switching briefly between different key centers), some sus2 / 7. |
+| rock_pop_0a							| | : Simplicity, mainly major chords, I-IV-V, occasional secondary dominants e.g. II-V-I, strong diatonicism, some sus2 / 7 / 9.  |
+| rock_pop_0b							| | : Mature introspection, chromaticism, notes outside the key's scale, embracing minor chords and modal borrowing, some sus2 / sus4 / 7 / 9.  |
+| rock_pop_1a							| | : A balance between simplicity and sophistication, limited chord vocabulary ( major, minor, dominant seventh, ccasional subdominant like IIm7), Mode mixture (borrowed chords from minor modes like Dorian or Aeolian), Jazz influences (7b9 and diminished), some sus / 6 / 7 / 9 / 11 / dim. |
+| rock_pop_1b							| | : Greater Experimentation and Sophistication, expanded chord vocabulary (augmented, diminished, and altered chords - replacing a diatonic with a neighboring chromatic - e.g. maj7#11 ), some sus2 / sus4 / 6 / 7 / 9 / dim . |
+| rock_pop_2							| | : Blended elements of pop, rock, folk, blues, and gospel, major and minor 7th chords, modal influences, experimentation, unusual chord combinations, some 7 / dim. |
+| show_tune_1							| | : Rich and dynamic harmony, Simple Yet Sophisticated tonal harmony: with subtle chromaticism, unexpected modulations, extensions, and altered dominants (a dominant seventh chord, V7 chord, that has one or more of its tones "altered" meaning raised or lowered by a semitone to add extra tension and dissonance,e.g. G7 alter #3, the notes in this chord would be: G - B# - D - F),  some  sus / dim / aug / 6 / (dim) 7 (alter) / 9 / 11 / 13.  |
+| soft_rock_0							| | : Pop harmonies with rock and blues influence, mixolydian progressions (major chord on 7th scale degree) some power / sus2 / sus4 / 7 / 9 / dim. |
+| soul_1								| | : Roots in soul and blues, with a touch of pop and chord bass melody, some sus2 / sus4 / 6 / 7 / 9. |
+
+
 
 Each slice of melody has a set of pitch classes which can be mapped to a chord in a particular style.
 
@@ -180,14 +227,14 @@ in the nearest-rank ordered list of possible chords.
 
 ### Example VeeHarmGen workflow 1
 
-* Generate harmonic rhythms
-  * Choose desired harmonic rhythm e.g. BAR1 (optionally manually edit to vary the rhythm. 
+- Generate harmonic rhythms
+  - Choose desired harmonic rhythm e.g. BAR1 (optionally manually edit to vary the rhythm. 
   In MuseScore, to create a Chord Symbol: select start note and then use the menu option Add > Text > Chord Symbol 
   (shortcut Ctrl+K))  
-* Run desired harmonic rhythm for all styles
-  * Choose favourite style e.g. glam_rock_1 
-* Run chosen style with a variety of chord ranks e.g. 60, 30, 1 on various instruments (for a list of instruments: python VeeHarmGen.py -h)
-  * Choose favourite chord rank
+- Run desired harmonic rhythm for all styles
+  - Choose favourite style e.g. glam_rock_1 
+- Run chosen style with a variety of chord ranks e.g. 60, 30, 1 on various instruments (for a list of instruments: python VeeHarmGen.py -h)
+  - Choose favourite chord rank
 
 Assuming Perambulate.mxl is in VeeHarmGen\input\music:
 
@@ -195,18 +242,95 @@ Windows commands
 
     python VeeHarmGen.py -m input/music/Perambulate.mxl
     python VeeHarmGen.py -m output/Perambulate-BAR1.mxl
-    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 60 -i Saxophone
-    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 30 -i "Reed Organ" 
-    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 1 -i Celesta
+    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 60 -i Saxophone
+    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 30 -i "Reed Organ" 
+    python VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 1 -i Celesta
  
 macOS / Ubuntu commands 
 
     python3 VeeHarmGen.py -m input/music/Perambulate.mxl
     python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl
-    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 60 -i Saxophone
-    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 30 -i "Reed Organ"
-    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -r 1 -i Celesta
+    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 60 -i Saxophone
+    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 30 -i "Reed Organ"
+    python3 VeeHarmGen.py -m output/Perambulate-BAR1.mxl -s glam_rock_1 -c rank -n 1 -i Celesta
 
+### Example VeeHarmGen workflow 2
+
+- Generate harmonic rhythms from an input melody file with no with placeholder chords.
+  - Choose best harmonic rhythm e.g. BEAT1, BEAT2 or BAR1 
+- Optionally manually edit generated chosen file to vary the harmonic rhythm. 
+It may be helpful to open all the preferred harmonic rhythm files 
+and copy and paste chord harmonic rhythms to the best one. 
+Note: the chord names do not matter as they will be replaced later. 
+  - In MuseScore:
+	- to delete a chord symbol, select it and press the Delete key
+	- to create a Chord Symbol: select start note and then use the menu option Add > Text > Chord Symbol 
+  (shortcut Ctrl+K))  
+	- To copy a harmonic rhythm, in source file, select first Chord Symbol, shift+click last chord symbol, Ctrl+C to copy.
+In target file, delete any existing chords in the target bars, select first note in target bars, Ctrl+V to paste. 	
+- Run desired harmonic rhythm for first 10 chord outcomes in desired style(s) e.g. country_rock_2 
+- Choose favourite chord outcome
+
+Assuming Cairo.mxl is in VeeHarmGen\input\music and Cairo-PC.mxl is created in VeeHarmGen\input\music\placeholder_chords:
+
+Windows commands:
+
+	wf2_no_pc Cairo
+	
+	"C:\Program Files\MuseScore 3\bin\MuseScore3.exe"
+		- File > Open ... e.g. ...\VeeHarmGen\output\Cairo-BEAT1.mxl and BEAT2 and BAR1
+		- when finished editing best file,
+		- File > Export > MusicXML, Export ...,  ...\VeeHarmGen\input\music\placeholder_chords\Cairo-PC.mxl
+		
+	wf2_nth_outcome input/music/placeholder_chords/Cairo-PC.mxl country_rock_2
+
+ 
+macOS / Ubuntu commands 
+
+    ./wf2_no_pc.sh Cairo
+	
+	In Finder navigate to VeeHarmGen/output and open desired file with MuseScore
+    e.g. ...\VeeHarmGen\output\Cairo-BEAT1.mxl and BEAT2 and BAR1
+		- when finished editing best file,
+		- File > Export > MusicXML, Export ...,  ...\VeeHarmGen\input\music\placeholder_chords\Cairo-PC.mxl
+		
+    ./wf2_nth_outcome.sh input/music/placeholder_chords/Cairo-PC.mxl country_rock_2
+
+### Example VeeHarmGen workflow 3
+
+- Manually add harmonic rhythm chords (e.g. C)  to an input melody file, for example
+  - open input\music\placeholder_chords\Cairo-PC.mxl with MuseScore
+  - In MuseScore to create a Chord Symbol: select start note and then use the menu option Add > Text > Chord Symbol 
+  (shortcut Ctrl+K)), to delete a chord symbol, select it and press the Delete key  
+  - Choose favourite style(s) e.g. _pop_ 
+- Run a number of chord outcomes in a chosen style(s) and instrument on an input file.
+
+Windows:
+
+	run_out 1 _pop_ Harmonica input/music/placeholder_chords/Cairo-PC.mxl
+	
+ 
+macOS / Ubuntu: 
+
+    ./run_out.sh 1 _pop_ Harmonica input/music/placeholder_chords/Cairo-PC.mxl
+
+- Audition output chords in output directory in MuseScore
+	  
+
+### Evaluating VeeHarmGen output against manual harmonisation
+
+There are different ways to harmonise a melody, depending on the style and genre of music. Some common methods are:
+
+- Using primary chords: 
+	- These are the chords built on the first, fourth, and fifth degrees of the scale, also known as the I, IV, and V chords. 
+	They are the most basic and common chords in any key, and they can harmonise any melody note in that key. 
+	- For example, in the key of C major, the primary chords are Cmaj, Fmaj, and Gmaj. To harmonise a melody in C major, you can use these three chords and find one that has a note in common with each melody note. 
+- Using secondary chords: 
+	- These are the chords built on the other degrees of the scale, such as the II, III, VI, and VII chords. They are also called diatonic chords, because they are derived from the same scale as the melody. They can add more variety and colour to the harmony, especially when used with primary chords. 
+	- For example, in the key of C major, the secondary chords are Dmin, Emin, Amin, and Bdim. To harmonise a melody in C major, you can use these chords along with the primary chords and find one that has a note in common with each melody note. 
+- Using non-diatonic chords: 
+	- These are chords that do not belong to the same scale as the melody, but they can still create interesting and unexpected harmonies. They are also called chromatic chords, because they introduce notes that are outside of the scale. They can be borrowed from other keys or modes, or they can be altered or extended versions of diatonic chords. 
+	- For example, in the key of C major, some non-diatonic chords are Cmin, F#maj, G7b9, or Amaj7. To harmonise a melody in C major, you can use these chords along with the diatonic chords and find one that has a note in common with each melody note. However, you have to be careful not to clash with the melody or create too much dissonance. 
 
 
 ## Prerequisites
@@ -214,9 +338,9 @@ macOS / Ubuntu commands
 Pre-requisites for VeeHarmGen include MuseScore, Python, and Music21.
 For more information on pre-requisite installation see:
  
-* https://github.com/RedFerret61/MarkMelGen#WindowsInstall
-* https://github.com/RedFerret61/MarkMelGen#macosinstall
-* https://github.com/RedFerret61/MarkMelGen#ubuntuinstall
+- https://github.com/RedFerret61/MarkMelGen#WindowsInstall
+- https://github.com/RedFerret61/MarkMelGen#macosinstall
+- https://github.com/RedFerret61/MarkMelGen#ubuntuinstall
 
 
 
@@ -229,24 +353,34 @@ For more information on pre-requisite installation see:
  Download release zip to desired directory for VeeHarmGen and unzip with right click Extract All ...
 #### Run VeeHarmGen on Windows 
 
- In a Command Prompt window change to install directory and show VeeHarmGen help e.g.:
+ In a Command Prompt window change to install directory e.g.
 
     cd C:\Users\paul\Documents\VeeHarmGen
+	
+If you want to create a local environment variable with the VHG install directory run: 
+	
+	create_env_VHG.cmd
+
+Now you can start a new command prompt and type this shortcut to change to the VHG install directory:
+
+	cd %VHG%
+	
+Show VeeHarmGen help e.g.:
 
     VeeHarmGen.py -h
     :: or
     python VeeHarmGen.py -h
 
 There are scripts to show VeeHarmGen features.
-In a Command Prompt window change to install directory and run a script e.g.:
+Start a new Command Prompt window, change to install directory and run a script e.g.:
 
 ##### One measure harmonic rhythm
 
-    cd C:\Users\paul\Music\VeeHarmGen
+    cd %VHG%
     run.cmd
 
         USAGE: run mxlfile
-           where mxfile.mxl is in input/music e.g. run music
+           where mxlfile.mxl is in input/music e.g. run music
            Output is in output
         Produces harmonic rhythm placeholders and styles for the one measure harmonic rhythm.
 
@@ -257,7 +391,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
 
     run_BAR1_rock.cmd
         USAGE: run_BAR1_rock mxlfile
-               where mxfile.mxl is in input/music e.g. run_BAR1_rock music
+               where mxlfile.mxl is in input/music e.g. run_BAR1_rock music
                Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR1" as input for a "rock" style subset
@@ -267,7 +401,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     run_BAR2_folk.cmd
 
         USAGE: run_BAR2_folk mxlfile
-               where mxfile.mxl is in input/music e.g. run_BAR2_folk music
+               where mxlfile.mxl is in input/music e.g. run_BAR2_folk music
                Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR2" as input for a "folk" style subset
@@ -277,7 +411,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     run_BEAT2_jazz.cmd
 
         USAGE: run_BEAT2_jazz mxlfile
-               where mxfile.mxl is in input/music e.g. run_BEAT2_jazz music
+               where mxlfile.mxl is in input/music e.g. run_BEAT2_jazz music
                Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BEAT2" as input for a "jazz" style subset
@@ -287,26 +421,47 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     run_placeholder.cmd
 
         USAGE: run_placeholder mxlfile
-               where mxfile.mxl is in input/music/placeholder_chords e.g. run_placeholder music
+               where mxlfile.mxl is in input/music/placeholder_chords e.g. run_placeholder music
                Output is in output
         Uses the input file placeholder chords to output files for "all" styles.
+		
+
+##### A range of chord popularites by nth_outcome
+
+    run_nth_outcome.cmd
+
+        USAGE: run_nth_outcome mxlfile style
+               where mxlfile.mxl is in input/music 
+			   and style is a filter string on files in input/style directory 
+			   where a style of jazz only includes style names containing the string jazz
+			   
+			   e.g. run_nth_outcome music all-
+			   e.g. run_nth_outcome Cairo all_contemporary
+			   e.g. run_nth_outcome Love_Stand_Strong all_jazz
+			   
+			   
+               Output is in output
+        Produces harmonic rhythm placeholders and then
+        uses "BAR1" as input for desired style(s) 
+		for a range of chord nth_outcomes away from the most popular outcome.		
+
 
 ##### A range of chord popularity ranks
 
     run_rank.cmd
 
         USAGE: run_rank mxlfile
-               where mxfile.mxl is in input/music e.g. run_rank music
+               where mxlfile.mxl is in input/music e.g. run_rank music
                Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR1" as input for the "all" style superset for a range of chord popularity ranks (-r)
 
-##### A range of chord popularity ranks
+##### A demonstration of chord types
 
     run_demo.cmd
 
         USAGE: run_demo mxlfile
-               where mxfile.mxl is in input/music e.g. run_demo music
+               where mxlfile.mxl is in input/music e.g. run_demo music
                Output is in output
         Produces demonstration chord type files for each harmonic rhythm.
 
@@ -337,12 +492,12 @@ In a Command Prompt window change to install directory and run a script e.g.:
 ##### One measure harmonic rhythm
 
     cd ~/VeeHarmGen
-    chmod a+x run*
+    chmod a+x *.sh
     
     ./run.sh
 
         USAGE: ./run.sh mxlfile
-           where mxfile.mxl is in input/music e.g. ./run.sh music
+           where mxlfile.mxl is in input/music e.g. ./run.sh music
            Output is in output
         Produces harmonic rhythm placeholders and styles for the one measure harmonic rhythm.
 
@@ -354,7 +509,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     ./run_BAR1_rock.sh
     
         USAGE: ./run_BAR1_rock.sh mxlfile
-            where mxfile.mxl is in input/music e.g. ./run_BAR1_rock.sh music
+            where mxlfile.mxl is in input/music e.g. ./run_BAR1_rock.sh music
             Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR1" as input for a "rock" style subset
@@ -364,7 +519,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     ./run_BAR2_folk.sh
 
         USAGE: ./run_BAR2_folk.sh mxlfile
-            where mxfile.mxl is in input/music e.g. ./run_BAR2_folk.sh music
+            where mxlfile.mxl is in input/music e.g. ./run_BAR2_folk.sh music
             Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR2" as input for a "folk" style subset
@@ -374,7 +529,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     ./run_BEAT2_jazz.sh
 
         USAGE: ./run_BEAT2_jazz.sh mxlfile
-            where mxfile.mxl is in input/music e.g. ./run_BEAT2_jazz.sh music
+            where mxlfile.mxl is in input/music e.g. ./run_BEAT2_jazz.sh music
             Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BEAT2" as input for a "jazz" style subset
@@ -384,16 +539,38 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     ./run_placeholder.sh
 
         USAGE: ./run_placeholder.sh mxlfile
-            where mxfile.mxl is in input/music/placeholder_chords e.g. ./run_placeholder.sh music
+            where mxlfile.mxl is in input/music/placeholder_chords e.g. ./run_placeholder.sh music
             Output is in output
         Uses the input file placeholder chords to output files for "all" styles.
+		
+
+##### A range of chord popularites by nth_outcome
+
+    ./run_nth_outcome.sh
+
+        USAGE: ./run_nth_outcome mxlfile style
+               where mxlfile.mxl is in input/music 
+			   and style is a filter string on files in input/style directory 
+			   where a style of jazz only includes style names containing the string jazz
+			   
+			   e.g. ./run_nth_outcome.sh music all-
+			   e.g. ./run_nth_outcome.sh Cairo all_contemporary
+			   e.g. ./run_nth_outcome Love_Stand_Strong all_jazz
+			   
+			   
+               Output is in output
+        Produces harmonic rhythm placeholders and then
+        uses "BAR1" as input for the desired style(s) 
+		for a range of chord nth_outcomes away from the most popular outcome.
+
+		
 
 ##### A range of chord popularity ranks
 
     ./run_rank.sh
 
         USAGE: ./run_rank.sh mxlfile
-            where mxfile.mxl is in input/music e.g. ./run_rank.sh music
+            where mxlfile.mxl is in input/music e.g. ./run_rank.sh music
             Output is in output
         Produces harmonic rhythm placeholders and then
         uses "BAR1" as input for the "all" style superset for a range of chord popularity ranks (-r)
@@ -403,7 +580,7 @@ Double-click on a musicxml file to open it in MuseScore. When finished, Close Mu
     ./run_demo.sh
 
         USAGE: ./run_demo.sh mxlfile
-            where mxfile.mxl is in input/music e.g. ./run_demo.sh music
+            where mxlfile.mxl is in input/music e.g. ./run_demo.sh music
             Output is in output
         Produces demonstration chord type files for each harmonic rhythm.
 
@@ -449,9 +626,10 @@ Click OK and the staff will be gone.
 Any unwanted extra notes/rests may be selected and Deleted.
 
 #### Delete unwanted bars:
-For example bars in a different key signature . In MuseScore 3: In top ribbon, select "Page View". Page Down to 2nd key signature.
+For example bars in a different key signature . 
+In MuseScore 3: In top ribbon, select "Page View". Page Down to 2nd key signature.
 To select a range of measures:
-1. Click on a blank space in the first desired measure;
+1. Click on a blank space in the first desired measure; Page Down to last measure.
 2. Hold down Shift, then click on a space in the last measure of the desired range.
 
 Then select Tools → Remove Selected Range or press Ctrl + Del (Mac: ⌘ + Backspace )
@@ -476,22 +654,22 @@ or
 
 Chord summary:
 
-* 100 ... ON_KEY, PEDAL, NEXT_INTERVAL, BASS
-* 200 ... SUSPENDED2
-* 300 ... MINOR, MAJOR
-* 400 ... SUSPENDED4
-* 500 ... FIFTH
-* 600 ... SIXTH
-* 700 ... SEVENTH
-* 900 ... NINTH, ELEVENTH, THIRTEENTH
+- 100 ... ON_KEY, PEDAL, NEXT_INTERVAL, BASS
+- 200 ... SUSPENDED2
+- 300 ... MINOR, MAJOR
+- 400 ... SUSPENDED4
+- 500 ... FIFTH
+- 600 ... SIXTH
+- 700 ... SEVENTH
+- 900 ... NINTH, ELEVENTH, THIRTEENTH
 
  Harmonic rhythms:
  
-* BEAT1 = chord changes every beat
-* BEAT2 = chord changes every couple of beats
-* BAR1 = chord changes every measure
-* BAR2 = chord changes every 2 measures
-* BAR4 = chord changes every 4 measures
+- BEAT1 = chord changes every beat
+- BEAT2 = chord changes every couple of beats
+- BAR1 = chord changes every measure
+- BAR2 = chord changes every 2 measures
+- BAR4 = chord changes every 4 measures
 
 This may be manually edited to add or substitute other chords from other output files.
 
@@ -532,10 +710,10 @@ Experiment with cadences in your chord progressions.
 
 
 ### MuseScore Track/Chord Volume
-* View > Mixer (F10)
-* At top of desired channel (with chords) click right arrow to show channels
-* Expect display of 2 channels: normal and Chord syms.
-* You can now adjust volume of the main track and chord symbols separately.
+- View > Mixer (F10)
+- At top of desired channel (with chords) click right arrow to show channels
+- Expect display of 2 channels: normal and Chord syms.
+- You can now adjust volume of the main track and chord symbols separately.
 
 
 ### Play output with Metronome
@@ -543,7 +721,7 @@ Experiment with cadences in your chord progressions.
  View > Play Panel (F11 toggle) and  by Metronome, click the right icon for play metronome.
 
 If output is corrupted in MuseScore 3.6.2, alternatively check the output in other score writing software e.g.
-* https://my.avid.com/get/sibelius-first 
+- https://my.avid.com/get/sibelius-first 
 
 ## ToolsForStyleCreation
 
@@ -551,50 +729,109 @@ To create your own input style files you need several musicxml (.mxl) files.
 Each file must contain a leadsheet melody with chord symbols above the staff. 
 
 
-* "create_chord_map.py" analyses one song to create chord data files 
-* Manually create a new style name directory and populate with chord data files from several songs
-* "create_styles.py" merges the chord data from several songs to create one style
+- "create_chord_map.py" analyses one song to create chord data files 
+- Manually create a new style name directory and populate with chord data files from several songs
+- "create_styles.py" merges the chord data from several songs to create one style
 
-### Preparing input musicxml (.mxl) files with melody with chord symbols for create_chord_map.py
+### Converting an input musicxml (.mxl) or midi (.mid) file with melody and chord parts to a leadsheet with melody with chord symbols for create_chord_map.py
 
 The instructions assume you have MuseScore 3.6.2.
+	
+If you have a midi or musicxml file of the desired song with separate melody and chordal accompaniment parts:
+- Open the .mid file with MuseScore
+- View > Mixer F10 
+- Start Playback
+- In Mixer toggle "S" to solo each track to determine the name of the melody instrument e.g. trumpet, and best chordal instrument e.g. piano
 
-If you have a midi file of the desired song:
-* Open the .mid file with MuseScore
-* View > Mixer F10 
-* Start Playback
-* In Mixer toggle "S" to solo each track to determine the name of the melody instrument e.g. Harpsichord
+If the chord part does not have chord symbols then you can automatically add chord symbols 
+	using musescore plugin: 
+https://musescore.org/en/project/chord-identifier-pop-jazz 
 
-* Now see if the chords are available in chordify e.g.
-* https://chordify.net/ log in, search for the song, click on the one with the most "jam sessions" that is CHORDIFIED. Click  Overview.
-  (F11 full screen, screenshot, save)
-* In MuseScore transpose to match chordify (e.g. Ctrl+A, Tools Transpose Chromatically, By Interval, Up, Perfect Fifth deselect transpose key signatures )
+- Open midi (.mid) or music xml (.mxl) file in musescore.
+- Copy the melody to a new file:
+	- On the melody part, click first bar, hold "Page Dn" to end, shift click last bar, Ctrl+C to copy
+	- if the file has a key signature note the number of sharps or flats e.g. 5 sharps
+	- File > New , Next, Solo > Guitar, Next, select Key Signature, e.g. 5 sharps, Finish
+	- Ctrl-V to paste
+- Click on original midi tab in MuseScore
+	- Delete non-chordal parts from file to leave a (mainly) chordal part e.g. organ or piano :
+		- Edit > Instruments. For each non-chordal part e.g. bass, drums, melody, (occasional) strings, arpegiated guitar
+		- Select non-chordal part 
+		- Click "Remove from Score"
+	- On remaining chord part, click Plugins > Chords > Chord Identifier (Pop_Jazz) 
+	- eg Symbol:Normal, Bass:Yes, Inversion:No, Highlight:No, Incomplete:Show ?? Entire Note:Yes. OK.
+	- File > Export, Musicxml, Compressed, Export ... <song>-Chords.mxl
+- Copy Chords to new melody file (one at a time, as defect copying all together makes stacatto chords, not duration to next chord)	
+	- For each Chord Symbol in original midi tab
+		- Select Chord symbol, Ctrl-C to copy
+		- Select new melody file tab, click on matching melody note, Ctrl-V to paste Chord
+	- if you want to add a song section, e.g. PRECHORUS 1 ,  Add > Text > Stave Text (Ctrl+T)
+- When finished adding chord symbols to melody, save melody file:
+	- File > Export, Musicxml, Compressed, Export ... <song>-Melody-Chords.mxl
+	
 
-Assuming the harmony is correct in original MIDI file, add the chords to the melody track.
-* To enter a chord symbol:
-     Select a start note or rest; Press Ctrl + K (Mac: Cmd + K );
-     Enter chord symbol e.g. Am7. Exit chord symbol mode by pressing Esc.
-* To edit a chord symbol double click on it.
+Alternatively see if the chords are available in chordify e.g.
+- https://chordify.net/ log in, search for the song, click on the one with the most "jam sessions" that is CHORDIFIED. 
+  Click  Overview, Save to Setlist.
+  (F11 full screen, screenshot, save). 
+- If meter wrong then click Edit e.g. change Meter from 4/4 to 3/4. However bar lines may still not match exactly e.g. 1 Musescore  bar may equal 2 chordify bars. 
+- If chordify bar lines on wrong beat then click on the arrow buttons next to 'shift chords':
+- For each chord: 
+    - click on a square a couple of bars before chord 
+	- play (allow chordiy and YouTube to synchronise) 
+	- remember the melody note the chord sounds on
+	- enter chord on note of melody instrument stave in MuseScore
+        - Click on notes in other parts to check the note pitch (view > Status Bar) 
+		at the bottom fits the chordify chord
+		- Select a start note or rest; Press Ctrl + K (Mac: Cmd + K )
+        - Enter chord symbol e.g. Am7. Exit chord symbol mode by pressing Esc, or click away
+        - If you want to edit a chord symbol double click on it
+		- If the melody does not have a note on the desired beat then edit it to have a rest or note on that beat. e.g. 
+		    - View > Toolbars > Note Input selected 
+			- Note input mode selected (N)
+			- on toolbar select quarter note, and select rest or note (as appropriate)
+		    - on melody select a whole bar rest
+		    - it is converted to quarter note rests or notes
+			- press Esc
 
-* Edit > Instruments (I)
-* Select each stave, if not the melody stave, click "Remove from score", then click OK
-* Rewind to start, Start Playback. Check only melody remains.
-* File > Export, Musicxml, Export ...
-* Choose directory e.g. VeeHarmGen\input\music\placeholder_chords or VeeHarmGen\private\input\music\placeholder_chords
-* Rename e.g. Composer-Year-Song_Title
+or search Utlimate Guitar for Chords e.g. https://www.ultimate-guitar.com/search.php?title=The+Entertainer&page=1&type=300
 
-* Open the .mxl file with MuseScore
+- If key wrong then in MuseScore transpose to desired key, e.g. 
+	- for C / Am, Ctrl+A, Tools Transpose Chromatically, To Key, Closest, C Major/A minor, Options, select transpose chord symbols, use single # and b only.
+	- or other key such as up a fifth: Ctrl+A, Tools Transpose Chromatically, By Interval, Up, Perfect Fifth deselect transpose key signatures )
 
+When finished entering chords, reduce score to melody tracks 
+There may be more than one melody track, one file for each. 
+A melody track should not contain long passages of repeated notes, e.g. in a string quartet, melody tracks could be violin 1 and violin 2, probably not viola or cello.
+If there is more than one melody track, copy chords to each track and save.
+For each melody track, open the master file: 
 
- 
-* Play chordify with MusScore to check match (open Volume Mixer to balance)
-* Edit the musicxml (.mxl) files and remove unnecessary measures.
-In MuseScore 3:
+- Edit > Instruments (I)
+- Select each stave, if not the melody stave click "Remove from score", then click OK
+- Rewind to start, Start Playback. Check only melody remains.
+- Ensure all parts are in Concert Pitch. e.g. Change instrument set-up e.g. Sax to Piano or Voice, 
+    - ^A (select all), Right-click on an empty part of the measure and choose Stave/Part Properties... · 
+    - Click on Change Instrument. e.g. Piano , OK.  
+    - If it was a wind instrument e.g. sax then copy and paste into a non transposing track e.g. voice , or 
+    - Tools Transpose Chromatically, By Interval, Up, Minor Sixth, deselect transpose key signatures.
+	- or in Toolbar area, select Concert Pitch, which displays score in written or concert (sounding) pitch.
+- File > Export, Musicxml, Export ...
+- Choose directory e.g. VeeHarmGen\input\music\placeholder_chords\stylename or VeeHarmGen\private\input\music\placeholder_chords\stylename
+- Rename e.g. Song_Title-Chords
 
-  * Remove a range of measures: Select a range of measures;
+Tips for MuseScore 3:
+- Remove a range of measures: Select a range of measures;
   Press Ctrl+Del (Mac: Cmd+Del).
-
-* Save the changes (File > Export, Musicxml, Compressed, Export ...)
+- Remove a note or rest: Select 
+  Press Ctrl+Del (Mac: Cmd+Del).
+  Note: ripple edit is not available in MuseScore. If you need ripple edit then try Cakewalk.
+- Save the changes (File > Export, Musicxml, Compressed, Export ...)
+- To reduce a polyphonic stave to monophonic:
+    - Edit > Instuments, Keyboards, Piano,  Add to score,
+	- Select polyphonic line containing melody (click first note, shift click last note)
+	- Tools > Explode
+    - Edit > Instuments, for each non melody instrument,
+		- select Instrument, Remove from Score	
 
 ### Creating style chord data from song lead sheets in musicxml format
 
@@ -604,20 +841,23 @@ There is an example scripts to show how to create style chord data for VeeHarmGe
 
 This uses create_chord_map.py and create_styles.py.
 
-The "create_chord_map.py" tool can analyse an mxl file to create chord data files (.json) representing the chords for that file.
+The "create_chord_map.py" tool can analyse mxl files in a directory to create chord data files (.json) representing the chords for that file.
 By default the output is placed in the input/style directory.
 
 Normal run inputs specified song file and outputs to input/style:
 
 Note: ensure input filename does not contain spaces.
 
-    create_chord_map.py -m input\music\placeholder_chords\berlinAlexandersRagtime.mxl
-    create_chord_map.py -m input\music\placeholder_chords\fosterBrownHair.mxl
+    create_chord_map.py -m private/input/music/placeholder_chords/classical_classical_2/ -o private/input/style/classical_classical_2/
+
 
 Now check the chord data file, e.g. XXX-_-ptc.json, contains the expected chords from 
 input\music\placeholder_chords\XXX_normalised.mxl
 
-If not, the input file may be corrupted and need recreating.
+Note:
+- Double slash chords are ignored e.g. replace C/g/G with C/G 
+
+If not, the input file may be corrupted and need recreating, or input chords may need manually correcting.
 
 Note: although the song may appear to be incorrectly normalised, later VeeHarmGen.py will transpose the input tune similarly so the chords should match.
 
@@ -631,6 +871,7 @@ Run create_styles.py which for each sub-directory in input/styles
 merges the .json files in the sub-directory and writes 
 the style data in parent including the name of sub-directory in the output file name.
 e.g. traditional-1-_-ptc.json
+Note: aim to get an output file of at least 4k in size.
 
 Normal run (which looks for populated style directories under input/styles) :
 
@@ -640,3 +881,7 @@ Run specifying a different directory (note: afterwards, you will need to
 manually copy .json files to input/styles ) :
 
     create_styles.py -i private/input/style
+
+### Known Problems
+- Remove all Grace notes from input mxl or VeeHarmGen.py will fail with:  
+ZeroDivisionError: float division by zero

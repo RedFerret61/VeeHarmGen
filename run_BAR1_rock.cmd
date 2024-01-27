@@ -1,6 +1,6 @@
 @echo off
 echo USAGE: run_BAR1_rock mxlfile
-echo        where mxfile.mxl is in input/music e.g. run_BAR1_rock music
+echo        where mxlfile.mxl is in input/music e.g. run_BAR1_rock music
 echo        Output is in output
 echo Produces harmonic rhythm placeholders and then  
 echo uses "BAR1" as input for a "rock" style subset 
