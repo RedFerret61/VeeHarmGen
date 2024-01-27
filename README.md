@@ -6,6 +6,7 @@ These can be played back and edited in scorewriter programs
 such as MuseScore 3.6.2.
 
 There is a VeeHarmGen 3 demonstration video on youtube: https://youtu.be/Be0aRNpcL7k 
+[![Vertical Harmony Generator 3 - more chord outcomes](assets/images/youtube3.png)](https://youtu.be/Be0aRNpcL7k "Vertical Harmony Generator 3 - more chord outcomes !")
 There is a VeeHarmGen 2 demonstration video on youtube: https://www.youtube.com/watch?v=3fv-eC-yg7I
 
 [![Add chords to a melody using styles in VeeHarmGen 2](assets/images/youtube1.png)](https://www.youtube.com/watch?v=3fv-eC-yg7I "Add chords to a melody using styles in VeeHarmGen 2")
