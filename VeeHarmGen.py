@@ -27,6 +27,7 @@ import numpy
 import operator
 import os
 from pathlib import Path
+import random
 import re
 import sys
 import VeeHarmGen_utilities
@@ -34,14 +35,17 @@ import VeeHarmGen_utilities
 from collections import Counter
 from enum import Enum
 from fractions import Fraction
-from itertools import islice
+from itertools import islice, product
 from music21 import *
 from music21 import stream, note, harmony
 from music21.harmony import ChordSymbol, NoChord
 from VeeHarmGen_utilities import *
 
 # VEEHARMGEN_VERSION 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
+
+# default output format: 'mxl' (compressed) or 'musicxml' (uncompressed .musicxml)
+OUTPUT_FORMAT = 'mxl'
 
 # on ubuntu 20.04 default python 3.8.10 (without removesuffix)
 
@@ -128,7 +132,7 @@ def get_chord(initial_offset, offset_chord, prev_sho_cho):
 
     return short_chord
 
-def get_chord_from_pitch_to_chord_by_rank(number, v):
+def get_chord_from_pitch_to_chord_by_rank_v1(number, v):
     """
     given a pitch_to_chord v and a rank number return the short chord (e.g. Am or C) for the rank number
     :param number 
@@ -167,8 +171,59 @@ def get_chord_from_pitch_to_chord_by_rank(number, v):
     # input('Press Enter to continue...')
     return ch 
 
+def get_chord_from_pitch_to_chord_by_rank(number, v):
+    """
+    given a pitch_to_chord v and a rank number return the chord for the rank number
+    Rank behaviour:
+      number = 1   → least frequent chord
+      number = 100 → most frequent chord
+    """
 
-def get_chord_from_pitch_to_chord_by_nth_outcome(number, v):
+    # Sort chords by frequency DESCENDING
+    # (most frequent first)
+    sorted_v = dict(sorted(v.items(), key=operator.itemgetter(1), reverse=True))
+
+    sorted_v_len = len(sorted_v)
+
+    # --- NEW RANK LOGIC (REVERSED) ---
+    # number = 1   → choose from the end         (least frequent)
+    # number = 100 → choose from the beginning   (most frequent)
+    #
+    # Convert number (1–100) to index  (last→first)
+    #
+    # Example: number=1    → index = len-1  (last / least frequent)
+    #          number=100  → index = 0      (first / most frequent)
+    #
+    # Smooth linear interpolation:
+    iter_num = int((100 - number) / 100.0 * (sorted_v_len - 1))
+
+    # Ensure safe bounds
+    if iter_num < 0: iter_num = 0
+    if iter_num >= sorted_v_len: iter_num = sorted_v_len - 1
+
+    # --- FIND THE CHORD AT iter_num ---
+    # while preserving your "choose shortest chord on frequency ties" rule
+    iter_idx = 0
+    ch = None
+    f = None
+
+    for ch1, f1 in sorted_v.items():
+        if iter_idx == iter_num:
+            ch = ch1
+            f = f1
+        elif iter_idx > iter_num:
+            # same frequency → choose shortest chord label
+            if f1 == f and len(ch1) < len(ch):
+                ch = ch1
+        iter_idx += 1
+
+    print("number, sorted_v_len, iter_num, ch, sorted_v",
+          number, sorted_v_len, iter_num, ch, sorted_v)
+
+    return ch
+
+
+def get_chord_from_pitch_to_chord_by_nth_outcome_v1(number, v):
     """
     given a pitch_to_chord v and a nth_outcome number return the short chord (e.g. Am or C) for the nth_outcome number
     :param number 
@@ -203,12 +258,52 @@ def get_chord_from_pitch_to_chord_by_nth_outcome(number, v):
  
     print('number, sorted_v_len, iter_num, ch, sorted_v', number, sorted_v_len, iter_num, ch, sorted_v)
     # input('Press Enter to continue...')
-    # print('type(ch), ch, type(f), f', type(ch), ch, type(f), f )
-    # input('Press Enter to continue...')
     
     # return the chord by nth_outcome
     return ch 
     
+def get_chord_from_pitch_to_chord_by_nth_outcome(number, v):
+    """
+    given a pitch_to_chord v and a nth_outcome number return the short chord (e.g. Am or C) for the nth_outcome number
+    :param number 
+    :param v: a pitch_to_chord : e.g. {'C': 61, 'G7':25, 'Em':17, ...}
+    :return: short_chord e.g. 'G'
+    """
+    print('get_chord_from_pitch_to_chord_by_nth_outcome(number, v)', number, v)
+
+    # Build a stable sorted list of (chord, count) ordered by:
+    #  1) frequency desc, 2) chord name length asc (prefer simple names), 3) name lexicographic
+    items = list(v.items())
+    items.sort(key=lambda it: (-it[1], len(it[0]), it[0]))
+
+    sorted_v_len = len(items)
+    print('sorted_v_len', sorted_v_len)
+
+    if sorted_v_len == 0:
+        raise ValueError("Empty pitch_to_chord mapping")
+
+    # Determine index to select based on requested number:
+    # number == 0 -> most frequent (index 0)
+    # number maps directly to index when < length, else wrap modulo length
+    if number <= 0:
+        iter_num = 0
+    elif sorted_v_len == 1:
+        iter_num = 0
+    elif number < sorted_v_len:
+        iter_num = number
+    else:
+        iter_num = number % sorted_v_len
+
+    ch, cnt = items[iter_num]
+    # If there are other chords with the same count, prefer one without slash/extended if available
+    same_count_candidates = [c for c in items if c[1] == cnt]
+    # prefer candidate without '/' and with shortest name
+    same_count_candidates.sort(key=lambda it: (('/' in it[0]), len(it[0]), it[0]))
+    ch_preferred = same_count_candidates[0][0]
+
+    print('iter_num, ch, ch_preferred, sorted_items', iter_num, ch, ch_preferred, dict(items))
+    return ch_preferred
+
 def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, chord_choice, number):
     """
     given pitch_class and pitch_to_chord dictionary, return short chord (e.g. Am or C) at offset
@@ -226,6 +321,9 @@ def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, chor
         if invalid short_chord = 'NC'
     return short_chord
     """
+
+    print('')     
+    print('number is', number)  
 
     short_chord = 'C'
     # if no chord pitch_class then short_chord = 'NC
@@ -249,7 +347,20 @@ def get_chord_for_pitch_class(pitch_class, pitch_to_chord, output_filename, chor
                 ch = get_chord_from_pitch_to_chord_by_nth_outcome(number, v)
                 print('nth_outcome ch is', ch)  
                 # input('Press Enter to continue...')
-                
+
+            if chord_choice is Chord_Choice.INFER:
+                print('chord_choice is infer')
+                # Try inferencing using pitch-class templates and creativity number
+                ch_infer = get_chord_from_pitch_to_chord_by_infer(number, pitch_class)
+                if ch_infer is None:
+                    # fallback to nearest-known mapping if inference fails
+                    try:
+                        ch_infer = next(iter(v.keys()))
+                    except Exception:
+                        ch_infer = 'NC'
+                ch = ch_infer
+                print('infer ch is', ch)
+
             short_chord = ch    
             try:
                 test_chord = harmony.ChordSymbol(ch)
@@ -378,6 +489,96 @@ class SongSectionValues:
     the_instrument = music21.instrument.Instrument(instrumentName='Piano')
     TIME_SIG_WANTED = '3/4'
     transpose = None
+
+    def write_placeholder_chords_infer(self, output_filename, creativity):
+        """
+        Write melody with chords to output_filename using inference (INFER mode).
+        Chords are generated using pitch-class template matching.
+
+        :param output_filename: e.g. my.musicxml
+        :param creativity: creativity level 0-100 (0=deterministic, 100=weakest valid match)
+        :return: void
+        """
+        print('write_placeholder_chords_infer(self, output_filename, creativity)', output_filename, creativity)
+
+        score = stream.Score()
+        p0 = stream.Part()
+        p0.insert(0, self.the_instrument)
+
+        prev_sho_cho = 'NC'
+
+        # Get the first offset and pitch class
+        next_chord_offset, next_pitch_class = next(iter(SongSectionValues.song_offset_placeholder_chords.items()))
+        print('next_chord_offset', next_chord_offset)
+        print('next_pitch_class', next_pitch_class)
+
+        last_chord_offset = list(SongSectionValues.song_offset_placeholder_chords)[-1]
+        print('last_chord_offset', last_chord_offset)
+
+        # Iterate through the song stream
+        for n in SongSectionValues.song_stream.flatten():
+            # Skip non-note/rest elements
+            if type(n) != music21.note.Note and type(n) != music21.note.Rest:
+                if issubclass(n.__class__, (music21.instrument.Instrument, music21.harmony.ChordSymbol, music21.text.TextBox)):
+                    pass
+                elif issubclass(n.__class__, music21.expressions.RehearsalMark) and len(SongSectionValues.offset_section) == 1:
+                    pass
+                else:
+                    p0.append(n)
+            else:
+                # Only process if next_chord_offset is not None
+                if next_chord_offset is not None and n.offset >= next_chord_offset:
+                    print('n.offset >= next_chord_offset', n.offset, next_chord_offset)
+                    
+                    # Use inference to get chord
+                    sho_cho = get_chord_from_pitch_to_chord_by_infer(creativity, next_pitch_class)
+                    if sho_cho is None:
+                        sho_cho = 'NC'
+                    
+                    # Append the chord
+                    if sho_cho == 'NC':
+                        p0.append(NoChord())
+                    else:
+                        try:
+                            p0.append(ChordSymbol(sho_cho))
+                        except:
+                            p0.append(NoChord())
+                    
+                    prev_sho_cho = sho_cho
+
+                    # Update next_chord_offset and next_pitch_class if not at the last chord offset
+                    if next_chord_offset != last_chord_offset:
+                        temp = iter(SongSectionValues.song_offset_placeholder_chords)
+                        for k in temp:
+                            if k == next_chord_offset:
+                                next_chord_offset = next(temp, None)
+                                break
+                        if next_chord_offset is not None:
+                            next_pitch_class = SongSectionValues.song_offset_placeholder_chords[next_chord_offset]
+                            print('the next_chord_offset', next_chord_offset)
+                            print('the next_pitch_class', next_pitch_class)
+                    else:
+                        # If at the last chord offset, set next_chord_offset to None
+                        next_chord_offset = None
+
+                # Append the note/rest
+                p0.append(n)
+
+        # Write the output stream
+        score.insert(0, metadata.Metadata())
+        filename = Path(output_filename)
+        score.metadata.title = filename.with_suffix('')
+        score.metadata.composer = 'VeeHarmGen ' + __version__ + '\n' + output_filename + '\n'
+
+        score.insert(0, p0)
+
+        first_note, last_note = get_first_last_note_names(score)
+        #output_filename = update_filename_with_range(output_filename, first_note, last_note)
+
+        score.write(OUTPUT_FORMAT, fp=self.OUTPUT_PATH + output_filename)
+
+        print('output =', self.OUTPUT_PATH + output_filename)
+        return None
 
     def get_first_note(self):
         """
@@ -551,9 +752,9 @@ class SongSectionValues:
             if type(n) == music21.clef.TrebleClef:
                 print('music21.clef.TrebleClef')
 
-            if type(n) == music21.expressions.TextExpression:
-                # print('music21.expressions.TextExpression')
-                print('TextExpression =', n.content)
+            if type(n) == music21.expressions.RehearsalMark:
+                # print('music21.expressions.RehearsalMark')
+                print('RehearsalMark =', n.content)
 
             if type(n) == music21.key.KeySignature:
                 # print('music21.key.KeySignature', song.tonic.name, song.mode)
@@ -729,7 +930,8 @@ class SongSectionValues:
         # if n.nameWithOctave < self.TONE_RANGE_BOTTOM: self.TONE_RANGE_BOTTOM = n.nameWithOctave
         # if note.nameWithOctave > TONE_RANGE_TOP: TONE_RANGE_TOP = note.nameWithOctave
         # Following gave False with next line: A5 > G5, B5 > G5, C6 > G5 (assume bug with music21)
-        # if n.nameWithOctave > self.TONE_RANGE_TOP: self.TONE_RANGE_TOP = n.nameWithOctave
+        # if n.nameWithOctave > note.Note(max_note.nameWithOctave):
+        #     self.TONE_RANGE_TOP = n.nameWithOctave
 
         new_note = note.Note()
         new_note.nameWithOctave = n.nameWithOctave
@@ -916,7 +1118,7 @@ class SongSectionValues:
         printable_name = '[song_' + truncated_section_name + ']'
 
         # song_key = self.stream1.analyze('key')
-        # print('ANALYZE_CHOICE =', self.analyze_choice)
+        # print('ANALYZE_CHOICE =', analyze_choice)
         song_key = self.stream1.analyze(self.analyze_choice)
 
         # print('song_key.name', song_key.name)
@@ -979,7 +1181,7 @@ class SongSectionValues:
             shorter_stream = self.get_stream(start_note_offset, (start_note_offset + offset_increment) )
             # self.show_text_in_stream(shorter_stream)
             if stream_has_a_note(shorter_stream):
-                # print('ANALYZE_CHOICE =', self.analyze_choice)
+                # print('ANALYZE_CHOICE =', analyze_choice)
                 song_key = shorter_stream.analyze(self.analyze_choice)
                 song_key_name = short_chord(song_key.name)
                 sho_cho = short_chord(song_key.name)
@@ -990,7 +1192,7 @@ class SongSectionValues:
             if first_chord:
                 SongSectionValues.song_offset_chord_1_beat = SongSectionValues.song_offset_chord_1_beat + str(start_note_offset) + ": '" + str(sho_cho).replace(" ", "") + "'"
                 first_chord = False
-            else: # subsequent chords
+            else:
                 SongSectionValues.song_offset_chord_1_beat = SongSectionValues.song_offset_chord_1_beat + ", " + str(start_note_offset) + ": '" + str(sho_cho).replace(" ", "") + "'"
 
             if chord_count == beat_count:
@@ -1025,7 +1227,7 @@ class SongSectionValues:
             shorter_stream = self.get_stream(start_note_offset, (start_note_offset + offset_increment) )
             # self.show_text_in_stream(shorter_stream)
             if stream_has_a_note(shorter_stream):
-                # print('ANALYZE_CHOICE =', self.analyze_choice)
+                # print('ANALYZE_CHOICE =', analyze_choice)
                 song_key = shorter_stream.analyze(self.analyze_choice)
                 song_key_name = short_chord(song_key.name)
                 sho_cho = short_chord(song_key.name)
@@ -1082,7 +1284,7 @@ class SongSectionValues:
             shorter_stream = self.get_stream(start_note_offset, (start_note_offset + offset_increment) )
             # self.show_text_in_stream(shorter_stream)
             if stream_has_a_note(shorter_stream):
-                # print('ANALYZE_CHOICE =', self.analyze_choice)
+                # print('ANALYZE_CHOICE =', analyze_choice)
                 song_key = shorter_stream.analyze(self.analyze_choice)
                 sho_cho = short_chord(song_key.name)
             else:
@@ -1127,13 +1329,13 @@ class SongSectionValues:
             first_chord = True
             sho_cho = 'NC '
 
-            for start_note_offset in numpy.arange(current_section_start_note_offset,
-                                                      (last_note_offset + last_note_duration_quarterLength),
+            for start_note_offset in numpy.arange(current_section_start_note_offset, (last_note_offset + last_note_duration_quarterLength),
                                                       offset_increment):
                 # print('start_note_offset', start_note_offset, 'end_note_offset', (start_note_offset + offset_increment))
                 shorter_stream = self.get_stream(start_note_offset, (start_note_offset + offset_increment) )
                 # self.show_text_in_stream(shorter_stream)
                 if stream_has_a_note(shorter_stream):
+                    # print('ANALYZE_CHOICE =', analyze_choice)
                     song_key = shorter_stream.analyze(self.analyze_choice)
                     sho_cho = short_chord(song_key.name)
                 else:
@@ -1144,7 +1346,6 @@ class SongSectionValues:
                     chords_2_bars_each = chords_2_bars_each + '|' + sho_cho + '|'
                 else:
                     chords_2_bars_each = chords_2_bars_each + '|'
-
                 slice = slice + 1
                 if first_chord:
                     SongSectionValues.song_offset_chord_2_bar = SongSectionValues.song_offset_chord_2_bar + str(
@@ -1182,7 +1383,7 @@ class SongSectionValues:
                 first_chord = False
             else:  # subsequent chords
                 SongSectionValues.song_offset_chord_4_bar = SongSectionValues.song_offset_chord_4_bar + ", " + str(
-                    current_section_start_note_offset + start_note_offset) + ": '" + str(sho_cho).replace(" ","") + "'"
+                    current_section_start_note_offset + start_note_offset) + ": '" + str(sho_cho).replace(" ", "") + "'"
 
         # if there are >= 4 measures then calc
         if ( last_note_offset + last_note_duration_quarterLength - current_section_start_note_offset) >= (beat_count * 4):
@@ -1207,7 +1408,7 @@ class SongSectionValues:
                 shorter_stream = self.get_stream(start_note_offset, (start_note_offset + offset_increment))
                 # self.show_text_in_stream(shorter_stream)
                 if stream_has_a_note(shorter_stream):
-                    # print('ANALYZE_CHOICE =', self.analyze_choice)
+                    # print('ANALYZE_CHOICE =', analyze_choice)
                     song_key = shorter_stream.analyze(self.analyze_choice)
                     sho_cho = short_chord(song_key.name)
                 else:
@@ -1307,7 +1508,7 @@ class SongSectionValues:
                     # do not copy an Instrument or a chord
                     pass
                 # if text expression and only one 1 section (dummy intro)
-                elif issubclass(n.__class__, music21.expressions.TextExpression) and len(SongSectionValues.offset_section) == 1:
+                elif issubclass(n.__class__, music21.expressions.RehearsalMark) and len(SongSectionValues.offset_section) == 1:
                     # print('len(SongSectionValues.offset_section)', len(SongSectionValues.offset_section))
                     pass
                 else:
@@ -1338,15 +1539,17 @@ class SongSectionValues:
         score_to_write.metadata.title = filename.with_suffix('')
         score_to_write.metadata.composer = 'VeeHarmGen ' + __version__ + '\n' + output_filename + '\n'
 
+        first_note, last_note = get_first_last_note_names(score_to_write)
+        #output_filename = update_filename_with_range(output_filename, first_note, last_note)
+
         # self.show_text_in_stream(score_to_write)
         # score_to_write.show('text')
 
         # write output stream
-        score_to_write.write(fp=self.OUTPUT_PATH + output_filename)
+        score_to_write.write(OUTPUT_FORMAT, fp=self.OUTPUT_PATH + output_filename)
 
         print('output =',self.OUTPUT_PATH + output_filename)
         pass
-
 
     def write_placeholder_chords(self, pitch_to_chord, output_filename, chord_choice, number):
         """
@@ -1359,33 +1562,8 @@ class SongSectionValues:
         :param chord_choice
         :param number
         :return: void
-
-        Given:
-            SongSectionValues.song_offset_placeholder_chords e.g. =
-            {0.0: '1000 0000 0000', 12.0: '0000 1100 0000', 24.0: '1000 0000 0001', 36.0: '1000 0000 0000'}
-            pitch_to_chord e.g. =
-            {'1000 0000 0000': {'C': 2, 'Am7': 1, 'Am': 1}, '0010 0000 0000': {'F': 2, 'G': 1}, '1010 0000 0001': {'G': 1}, '0000 1000 0000': {'C': 1, 'Am': 1}, '0000 1100 0000': {'F': 1}, '1000 0000 0001': {'G': 1}, '1010 1100 0000': {'C': 1}, '0010 1100 0000': {'G': 1}, '1010 1101 0000': {'C': 1}, '0000 0100 0100': {'F': 1}, '0010 1000 0000': {'G': 1}}
-
-        next_chord_offset = first offset from song_offset_placeholder_chords
-        next_pitch_class = first pitch_class from song_offset_placeholder_chords
-        for each element
-            if not note:
-                copy to output stream
-            else:
-                if n.offset >= next_chord_offset:
-                    sho_cho = get_chord_for_pitch_class(next_pitch_class, pitch_to_chord)
-                    append sho_cho
-                    next_chord_offset = get_next_chord_offset(next_chord_offset)
-                    next_pitch_class = get_next_pitch_class(next_chord_offset)
-                append note
-
-        write output stream
         """
-
         print('write_placeholder_chords(self, pitch_to_chord, output_filename, chord_choice, number)', pitch_to_chord, output_filename, chord_choice, number)
-        # input('Press Enter to continue...')
-        # print('song_offset_placeholder_chords', SongSectionValues.song_offset_placeholder_chords)
-        # print('pitch_to_chord', pitch_to_chord)
 
         score = stream.Score()
         p0 = stream.Part()
@@ -1393,63 +1571,54 @@ class SongSectionValues:
 
         prev_sho_cho = 'NC'
 
-        # next_chord_offset = first offset from song_offset_placeholder_chords
-        # next_pitch_class = first pitch_class from song_offset_placeholder_chords
+        # Get the first offset and pitch class
         next_chord_offset, next_pitch_class = next(iter(SongSectionValues.song_offset_placeholder_chords.items()))
         print('next_chord_offset', next_chord_offset)
         print('next_pitch_class', next_pitch_class)
 
         last_chord_offset = list(SongSectionValues.song_offset_placeholder_chords)[-1]
         print('last_chord_offset', last_chord_offset)
-        # input('Press Enter to continue...')
 
-        # for each element
+        # Iterate through the song stream
         for n in SongSectionValues.song_stream.flatten():
-            # if not note:
+            # Skip non-note/rest elements
             if type(n) != music21.note.Note and type(n) != music21.note.Rest:
-                # copy all non-note types to output stream (unless instrument, ChordSymbol or TextBox)
-                if issubclass(n.__class__, music21.instrument.Instrument) or \
-                        issubclass(n.__class__, music21.harmony.ChordSymbol) or \
-                        issubclass(n.__class__, music21.text.TextBox) :
-                    # do not copy an Instrument or a chord
+                if issubclass(n.__class__, (music21.instrument.Instrument, music21.harmony.ChordSymbol, music21.text.TextBox)):
                     pass
-                # if text expression and only one 1 section (dummy intro)
-                elif issubclass(n.__class__, music21.expressions.TextExpression) and len(SongSectionValues.offset_section) == 1:
-                    # print('len(SongSectionValues.offset_section)', len(SongSectionValues.offset_section))
+                elif issubclass(n.__class__, music21.expressions.RehearsalMark) and len(SongSectionValues.offset_section) == 1:
                     pass
                 else:
                     p0.append(n)
-            # else is note or rest
             else:
-                #         if n.offset >= next_chord_offset:
-                if n.offset >= next_chord_offset:
-                    print('n.offset >= next_chord_offset',  n.offset, next_chord_offset)
+                # Only process if next_chord_offset is not None
+                if next_chord_offset is not None and n.offset >= next_chord_offset:
+                    print('n.offset >= next_chord_offset', n.offset, next_chord_offset)
                     sho_cho = get_chord_for_pitch_class(next_pitch_class, pitch_to_chord, output_filename, chord_choice, number)
-                    # append chord
+                    # Append the chord
                     if sho_cho == 'NC':
                         p0.append(NoChord())
                     else:
                         p0.append(ChordSymbol(sho_cho))
                     prev_sho_cho = sho_cho
 
+                    # Update next_chord_offset and next_pitch_class if not at the last chord offset
                     if next_chord_offset != last_chord_offset:
-                        chord_offset = None
                         temp = iter(SongSectionValues.song_offset_placeholder_chords)
-                        curr_pitch_class = next_pitch_class
                         for k in temp:
                             if k == next_chord_offset:
                                 next_chord_offset = next(temp, None)
-                        # given key get value
+                                break
                         next_pitch_class = SongSectionValues.song_offset_placeholder_chords[next_chord_offset]
                         print('the next_chord_offset', next_chord_offset)
                         print('the next_pitch_class', next_pitch_class)
-                # append note/rest
+                    else:
+                        # If at the last chord offset, set next_chord_offset to None
+                        next_chord_offset = None
+
+                # Append the note/rest
                 p0.append(n)
 
-        # input('Press Enter to continue...')
-
-        # write output stream
-        # metadata
+        # Write the output stream
         score.insert(0, metadata.Metadata())
         filename = Path(output_filename)
         score.metadata.title = filename.with_suffix('')
@@ -1457,25 +1626,28 @@ class SongSectionValues:
 
         score.insert(0, p0)
 
-        # write output stream
-        score.write(fp=self.OUTPUT_PATH + output_filename)
+        first_note, last_note = get_first_last_note_names(score)
+        #output_filename = update_filename_with_range(output_filename, first_note, last_note)
 
-        print('output =',self.OUTPUT_PATH + output_filename)
+        score.write(OUTPUT_FORMAT, fp=self.OUTPUT_PATH + output_filename)
 
+        print('output =', self.OUTPUT_PATH + output_filename)
         return None
+
     # end of SongSectionValues class
 
 def has_section(a_song):
     """
     :param a_song: e.g. a song melody
     :return: True if a_stream has a section name
+   
     """
     print('Looking for a section...')
     result = False
 
     # for each element in stream
     for n in a_song.flatten():
-        if type(n) == music21.expressions.TextExpression:
+        if type(n) == music21.expressions.RehearsalMark:
             if is_section(n.content):
                 print('has_section',n.content)
                 result = True
@@ -1540,6 +1712,16 @@ def short_chord(chord):
 def short_placeholder_chord(chord_in):
     """
     given a long chord name e.g. A minor or C major
+
+
+
+
+
+
+
+
+
+
     return short name e.g. A- or C
     """
     chord = str(chord_in)
@@ -1634,6 +1816,256 @@ def chord_is_minor(val):
         result = True
     return result
 
+def display_pitches_in_pitch_class(pitch_class):
+    """
+    Given a pitch class in binary format (e.g. "1000 0000 0000"),
+    return a list of pitch names that are represented.
+    
+    :param pitch_class: binary string e.g. "1000 0000 0000"
+    :return: list of pitch names e.g. ['C', 'C#', 'D', ...]
+    """
+    pitch_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    
+    # Remove spaces from pitch_class
+    binary_string = pitch_class.replace(' ', '')
+    
+    # Get the pitches where bit is '1'
+    pitches = []
+    for i, bit in enumerate(binary_string):
+        if bit == '1':
+            pitches.append(pitch_names[i % 12])
+    
+    return pitches
+
+# --- chord matching helpers -------------------------------------------------
+NOTE_TO_PC = {
+    "C": 0, "C#": 1, "Db": 1,
+    "D": 2, "D#": 3, "Eb": 3,
+    "E": 4, "F": 5, "F#": 6, "Gb": 6,
+    "G": 7, "G#": 8, "Ab": 8,
+    "A": 9, "A#": 10, "Bb": 10,
+    "B": 11
+}
+# Prefer natural or sharp names for printing
+PC_TO_NOTE = {v: k for k, v in NOTE_TO_PC.items() if len(k) == 1 or "#" in k}
+
+# CHORD_TEMPLATES = {
+#     "maj": [0, 4, 7],
+#     "min": [0, 3, 7],
+#     "maj7": [0, 4, 7, 11],
+#     "min7": [0, 3, 7, 10],
+#     "7": [0, 4, 7, 10],
+#     "sus4": [0, 5, 7],
+#     "6": [0, 4, 7, 9],
+#     "m6": [0, 3, 7, 9],
+#     "dim": [0, 3, 6],
+#     "aug": [0, 4, 8],
+# }
+
+# note M21 does not recognise D5 etc
+#    "5":     [0, 7],
+
+CHORD_TEMPLATES = {
+    "maj":   [0, 4, 7],
+    "min":   [0, 3, 7],
+    "maj7":  [0, 4, 7, 11],
+    "min7":  [0, 3, 7, 10],
+    "7":     [0, 4, 7, 10],
+    "sus4":  [0, 5, 7],
+    "sus2":  [0, 2, 7],
+    "6":     [0, 4, 7, 9],
+    "m6":    [0, 3, 7, 9],
+    "dim":   [0, 3, 6],
+    "aug":   [0, 4, 8],
+    "mM7":   [0, 3, 7, 11],  
+    "m7b5":  [0, 3, 6, 10],
+    "add2":  [0, 2, 4, 7],
+    "madd2": [0, 2, 3, 7],
+}
+
+def best_chords(melody_notes, top_n=5):
+    """
+    Return the top N chords that best fit the given melody notes.
+    melody_notes: list of pitch names like ['C', 'F#', 'A']
+    """
+    try:
+        melody_pcs = {NOTE_TO_PC[note] for note in melody_notes}
+    except KeyError:
+        # if unknown note name, return empty
+        return []
+
+    results = []
+    for root_pc, quality in product(range(12), CHORD_TEMPLATES.keys()):
+        chord_pcs = {(root_pc + interval) % 12 for interval in CHORD_TEMPLATES[quality]}
+        matches = melody_pcs & chord_pcs
+        score = len(matches) / len(CHORD_TEMPLATES[quality])
+        if score > 0:
+            root_name = PC_TO_NOTE.get(root_pc, list(PC_TO_NOTE.values())[0])
+            results.append((f"{root_name}{quality}", score, sorted(matches)))
+    results.sort(key=lambda x: (-x[1], x[0]))
+    return results[:top_n]
+
+
+# def choose_chord_weighted(melody_notes, creativity):
+#     """
+#     Choose a chord from best_chords using a creativity parameter 0..100.
+#     creativity=0 => deterministic using scores; 100 => near-random uniform.
+#     Returns (name, score, matches) or None.
+#     """
+#     chords = best_chords(melody_notes, top_n=20)
+#     if not chords:
+#         return None
+
+#     scores = [c[1] for c in chords]
+#     adjusted = []
+#     for s in scores:
+#         # blend s with uniform weight: use + (was missing, caused TypeError)
+#         w = (1 - creativity/100.0) * s + (creativity/100.0) * 1.0
+#         # ensure non-zero positive weights
+#         adjusted.append(max(w, 1e-6))
+
+#     choice = random.choices(chords, weights=adjusted, k=1)[0]
+#     return choice
+
+
+# def choose_chord_weighted(melody_notes, creativity):
+#     """
+#     Select a chord candidate from best_chords using a deterministic mapping:
+#       - creativity = 0   -> most likely chord (highest score)
+#       - creativity = 50  -> middle candidate
+#       - creativity = 100 -> weakest valid match (lowest score)
+#     The function returns a single (name, score, matches) tuple or None if no chords.
+#     """
+#     chords = best_chords(melody_notes, top_n=20)
+#     if not chords:
+#         return None
+
+#     # chords are sorted by score descending from best_chords()
+#     n = len(chords)
+#     # Map creativity 0..100 to index 0..n-1 (0 => best, 100 => worst)
+#     idx = int(round((creativity / 100.0) * (n - 1)))
+#     idx = max(0, min(idx, n - 1))
+
+#     return chords[idx]
+
+# def choose_chord_weighted(melody_notes, creativity):
+#     """
+#     Select a chord candidate from best_chords using a deterministic mapping:
+#       - creativity = 0   -> most likely chord (highest score)
+#       - creativity = 50  -> middle candidate
+#       - creativity = 100 -> weakest valid match (lowest score)
+#     The function returns a single (name, score, matches) tuple or None if no chords.
+#     Additionally: if the selected chord is diminished or augmented (contains 'dim' or 'aug'),
+#     prefer another chord with the same score that is not dim/aug (if available).
+#     """
+#     chords = best_chords(melody_notes, top_n=20)
+#     if not chords:
+#         return None
+
+#     # chords are sorted by score descending from best_chords()
+#     n = len(chords)
+#     # Map creativity 0..100 to index 0..n-1 (0 => best, 100 => worst)
+#     idx = int(round((creativity / 100.0) * (n - 1)))
+#     idx = max(0, min(idx, n - 1))
+
+#     chosen = chords[idx]
+
+#     # If chosen chord is diminished or augmented try to find an alternative
+#     name, score, matches = chosen
+#     name_l = name.lower()
+#     if ('dim' in name_l) or ('aug' in name_l):
+#         # find other chords with same score that are not dim/aug
+#         same_score_non_special = [
+#             c for c in chords
+#             if abs(c[1] - score) < 1e-9 and ('dim' not in c[0].lower() and 'aug' not in c[0].lower())
+#         ]
+#         if same_score_non_special:
+#             # prefer the simplest (shortest name) then lexicographic
+#             same_score_non_special.sort(key=lambda c: (len(c[0]), c[0]))
+#             chosen = same_score_non_special[0]
+
+#     return chosen
+
+def choose_chord_weighted(melody_notes, creativity):
+    """
+    Select a chord candidate from best_chords using a deterministic mapping:
+      - creativity = 0   -> most likely chord (highest score)
+      - creativity = 50  -> middle candidate
+      - creativity = 100 -> weakest valid match (lowest score)
+
+    Additional rule:
+      - When multiple chords have the SAME score, prefer
+            *major and minor triads*, then other 3-note triads,
+            then dyads/power chords, then extended chords.
+    """
+    chords = best_chords(melody_notes, top_n=20)
+    if not chords:
+        return None
+
+    # --------------------------------------------------
+    #  SECONDARY SORT: triads outrank others on same score
+    # --------------------------------------------------
+
+    def chord_priority(name):
+        """
+        Lower number = higher priority
+        """
+        nl = name.lower()
+
+        # detect chord type by name
+        is_major = ('maj' in nl or nl.endswith('m') is False) and 'min' not in nl and 'dim' not in nl and 'aug' not in nl
+        is_minor = ('min' in nl) and 'dim' not in nl and 'aug' not in nl
+
+        # basic classification
+        if is_major or is_minor:
+            return 0   # top priority: major/minor triad
+        if 'sus' in nl:
+            return 1   # suspended triad
+        if nl.endswith('5'):
+            return 2   # power chord / dyad
+        if 'dim' in nl or 'aug' in nl:
+            return 4   # lowest priority for equal scores
+        return 3       # other types (add9 etc.)
+
+    # Sort by score descending (primary), priority ascending (secondary).
+    chords.sort(key=lambda c: (-c[1], chord_priority(c[0])))
+
+    # --------------------------------------------------
+    #  SELECT chord according to creativity
+    # --------------------------------------------------
+    n = len(chords)
+    idx = int(round((creativity / 100.0) * (n - 1)))
+    idx = max(0, min(idx, n - 1))
+
+    chosen = chords[idx]
+    name, score, matches = chosen
+
+    # Keep your original “avoid dim/aug if possible” rule
+    name_l = name.lower()
+    if ('dim' in name_l) or ('aug' in name_l):
+        same_score_non_special = [
+            c for c in chords
+            if abs(c[1] - score) < 1e-9 and ('dim' not in c[0].lower() and 'aug' not in c[0].lower())
+        ]
+        if same_score_non_special:
+            same_score_non_special.sort(key=lambda c: (len(c[0]), c[0]))
+            chosen = same_score_non_special[0]
+
+    return chosen
+
+def get_chord_from_pitch_to_chord_by_infer(number, pitch_class):
+    """
+    Infer a chord name from a pitch_class using template-based matching.
+    number acts as creativity (0..100).
+    Returns chord short name string or None.
+    """
+    # Convert pitch_class to list of pitch names e.g. ['C','E','G']
+    melody_notes = display_pitches_in_pitch_class(pitch_class)
+    chosen = choose_chord_weighted(melody_notes, number)
+    if not chosen:
+        return None
+    chord_name, score, matches = chosen
+    return chord_name
 
 def get_seventh_chord(val):
     """
@@ -1906,6 +2338,7 @@ def get_descending_bass_tetra_chord(val):
 
     return result
 
+
 def get_descending_chromatic_bass_tetra_chord(val):
     """
     :param val: a simple chord e.g. C, Am etc
@@ -2015,6 +2448,7 @@ def get_ascending_bass_tetra_3_chord(val):
         elif SongSectionValues.last_bass == 'G': SongSectionValues.last_bass = 'C'
 
     return result
+
 
 def get_chord_output(chord_output, key, key_finder_offset_chords, prev_value):
     """
@@ -2520,7 +2954,7 @@ def get_offset_chord(chord_output, harmonic_rhythm):
 
 
 
-def add_TextExpression(input_song):
+def add_RehearsalMark(input_song):
     """
     :param input_song:
     :return: output_song
@@ -2536,10 +2970,10 @@ def add_TextExpression(input_song):
         # else is note or rest
         else:
             if first_note == True:
-                # n_text = music21.expressions.TextExpression
+                # n_text = music21.expressions.RehearsalMark
                 # # add the section name text to the score.
-                te = expressions.TextExpression('intro')
-                # # place TextExpression above the stave
+                te = expressions.RehearsalMark('intro')
+                # # place RehearsalMark above the stave
                 te.placement = 'above'
                 p0.append(te)
                 # n.content = 'intro'
@@ -2561,9 +2995,9 @@ def get_offset_section(input_song):
     the_offset = 0.0
 
     for n in input_song.flatten():
-        if type(n) == music21.expressions.TextExpression:
+        if type(n) == music21.expressions.RehearsalMark:
             if is_section(n.content):
-                # print('the_offset, TextExpression =', the_offset, n.content)
+                # print('the_offset, RehearsalMark =', the_offset, n.content)
                 offset_section[the_offset] = n.content
         # if note or rest then set the_offset
         if type(n) == music21.note.Note or type(n) == music21.note.Rest:
@@ -2715,7 +3149,25 @@ def get_first_instrument(a_stream):
 
     return first_inst
 
+def get_first_last_note_names(stream_obj):
+    """
+    Given a music21 Stream, return (first_note, last_note)
+    as strings like 'C4', 'G4'.
+    """
 
+    # Get all pitched notes from the stream, sorted by musical time
+    notes = sorted(
+        stream_obj.recurse().getElementsByClass(note.Note),
+        key=lambda n: n.offset
+    )
+
+    if not notes:
+        return None, None  # or raise an error if preferred
+
+    first_note = notes[0].nameWithOctave
+    last_note = notes[-1].nameWithOctave
+
+    return first_note, last_note
 
 
 def get_transpose_information(stream_title, a_stream):
@@ -2796,11 +3248,11 @@ def get_transpose_information(stream_title, a_stream):
 #     output_song.insert(0, p0)
 #     return output_song
 
-def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basename, chord_choice, number, style ):
+def generate_from_placeholder_chords_v1(a_song, song_key, instrument, mxlfile_basename, chord_choice, number, style ):
     """
     given a_song with a melody and placeholder chords,
     populate song_offset_placeholder_chords with offset and pitch classes in melody key e.g.
-    {3.0: '1000 0000 0000', 4.0: '1000 0000 0000', 5.0: '0010 0000 0000', .... etc
+    {3.0: '1000 0000 0000', 4.0: '1000 0000 0000', 5.0: '0010 0000 0000' .... etc
 
     for each style, generate chords in placeholders and
     write to the output folder
@@ -2810,7 +3262,9 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
     :param mxlfile_basename:
     :param chord_choice:
     :param number:
+    :param style 
     """
+
     print('generate_from_placeholder_chords', a_song, song_key, instrument, mxlfile_basename,  chord_choice, number, style)
     # input('Press Enter to continue...')
 
@@ -2896,7 +3350,7 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
             #         os.path.splitext(pitch_to_chord_file)[0]) + '-R' + str(rank) + '-' + dt + '.mxl'
             # remove -_-ptc from output filename
             output_filename = output_filename + '-' + str(
-                    os.path.splitext(pitch_to_chord_file)[0]).replace('-_-ptc', '') + '-' + str(chord_choice) + '-' + str(number) + '.mxl'
+                    os.path.splitext(pitch_to_chord_file)[0]).replace('-_-ptc', '') + '-' + str(chord_choice)[:3] + '-' + str(number) + f'.{OUTPUT_FORMAT}'
             print('output_filename', output_filename)
             # input('Press Enter to continue...')
             pitch_to_chord = load_json(input_pitch_to_chord_fully_qualified)
@@ -2905,6 +3359,228 @@ def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basen
             print('')
     return None
 
+def generate_from_placeholder_chords(a_song, song_key, instrument, mxlfile_basename, chord_choice, number, style ):
+    """
+    given a_song with a melody and placeholder chords,
+    populate song_offset_placeholder_chords with offset and pitch classes in melody key e.g.
+    {3.0: '1000 0000 0000', 4.0: '1000 0000 0000', 5.0: '0010 0000 0000' .... etc
+
+    for each style, generate chords in placeholders and
+    write to the output folder
+    :param a_song:
+    :param song_key:
+    :param instrument:
+    :param mxlfile_basename:
+    :param chord_choice:
+    :param number:
+    :param style 
+    """
+
+    print('generate_from_placeholder_chords', a_song, song_key, instrument, mxlfile_basename,  chord_choice, number, style)
+    
+    found_time_signature = False
+    first_TimeSig = True
+    songTimeSig = None
+
+    song_section_values = SongSectionValues(song_key, a_song)
+    analysis_choice = song_section_values.get_analyze_choice()
+
+    song_section_values.set_instrument(instrument)
+    print('song_section_values.analyze_choice', song_section_values.analyze_choice)
+
+    first_note_of_section = True
+    first_TimeSig = True
+
+    # for each element in stream
+    for n in song_section_values.song_stream.flatten():
+        if type(n) == music21.meter.TimeSignature:
+            if first_TimeSig:
+                song_section_values.set_time_sig(n)
+                first_TimeSig = False
+        # if note: update song_section_values
+        if type(n) == music21.note.Note:
+            song_section_values.update(n, first_note_of_section)
+            if first_note_of_section == True: first_note_of_section = False
+
+        if type(n) == music21.note.Rest:
+            song_section_values.update_rest(n)
+
+    song_section_values.print_placeholder_chords()
+
+    # at end of song strip final comma and add }
+    SongSectionValues.song_offset_placeholder_chords = remove_suffix(SongSectionValues.song_offset_placeholder_chords, ',') + '}'
+
+    # convert string to dictionary using ast.literal_eval() method
+    try:
+        SongSectionValues.song_offset_placeholder_chords = ast.literal_eval(
+            SongSectionValues.song_offset_placeholder_chords)
+    except BaseException as err:
+        print(f"Unexpected {err=}, {type(err)=}")
+        print('exit: Error ast.literal_eval song_offset_placeholder_chords',
+              SongSectionValues.song_offset_placeholder_chords)
+        sys.exit()
+
+    # version tag
+    version_tag = "v01"
+
+    # If chord_choice is INFER, generate chords directly without style files
+    if chord_choice == Chord_Choice.INFER:
+        print('Chord_Choice is INFER - generating chords via inference')
+        
+        # Create a pseudo pitch_to_chord dictionary for inference
+        # For INFER mode, we don't need pre-computed data, just use the inference engine
+        output_filename = os.path.splitext(mxlfile_basename)[0]
+        output_filename = output_filename + '-' + style + '-' + str(chord_choice.value)[:3] + '-' + str(number) + f'-{version_tag}.{OUTPUT_FORMAT}'
+        print('output_filename', output_filename)
+        
+        # Write chords using inference
+        song_section_values.write_placeholder_chords_infer(output_filename, number)
+        print('')
+        return None
+
+    # for non-INFER modes: load style files
+    pitch_to_chord_files = [f for f in os.listdir(INPUT_STYLE_PATH) if f.endswith('.json')]
+
+    print('pitch_to_chord_files in', INPUT_STYLE_PATH,  pitch_to_chord_files)
+
+    if pitch_to_chord_files == []:
+        print('exit: Error no pitch_to_chord_files in', INPUT_STYLE_PATH)
+        sys.exit()
+
+    dt = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    print('')
+
+    # version tag
+    version_tag = "v01"
+
+    for pitch_to_chord_file in pitch_to_chord_files:
+        if style in pitch_to_chord_file:
+            input_pitch_to_chord_fully_qualified = INPUT_STYLE_PATH + pitch_to_chord_file
+            print('Processing', input_pitch_to_chord_fully_qualified)
+            output_filename = os.path.splitext(mxlfile_basename)[0]
+            output_filename = output_filename + '-' + str(
+                    os.path.splitext(pitch_to_chord_file)[0]).replace('-_-ptc', '') + '-' + str(chord_choice.value)[:3] + '-' + str(number) + f'-{version_tag}.{OUTPUT_FORMAT}'
+            print('output_filename', output_filename)
+            pitch_to_chord = load_json(input_pitch_to_chord_fully_qualified)
+            song_section_values.write_placeholder_chords(pitch_to_chord, output_filename, chord_choice, number)
+            print('')
+    return None
+
+
+    
+def positive_int(value):
+    """
+    Validates if the argument is an integer greater than or equal to 1.
+    """
+    try:
+        ivalue = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"'{value}' is not a valid integer.")
+    
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError(f"'{value}' must be a positive integer (>= 1).")
+    return ivalue
+
+# TASK: Write a Python function that reads a MusicXML file, extracts musical data,
+# and returns a structured representation useful for melody generation.
+# Use clear, efficient, readable code and the music21 library.
+
+import music21
+
+# HINTS for Copilot:
+# - Parse the MusicXML file from the given full path
+# - Select the bar (measure) specified by bar_number
+# - Collect all notes in that bar
+# - Convert notes to pitch classes (C=0, C#=1, ..., B=11)
+# - Convert to a binary string form like '1000 1001 0001'
+# - Return the binary string (empty string if bar not found or has no notes)
+
+def get_pitch_class_for_bar_in_musicxml(bar_number: int, full_path_musicxml_filename: str) -> str:
+    """Return the pitch class for a given bar of a melody in a given MusicXML file.
+    The pitch class is a binary string such as '1000 1001 0001' representing notes C, E, G, B."""
+    # Parse the MusicXML file and get the specified measure
+    try:
+        score = music21.converter.parse(full_path_musicxml_filename)
+    except Exception as e:
+        print(f"Error parsing MusicXML file: {e}")
+        return ""
+
+    # Get the part (assuming a single part for melody)
+    part = score.parts[0] if score.parts else None
+    if not part:
+        return ""
+
+    # Get the measure by its number
+    measure = part.measure(bar_number)
+    if not measure:
+        return ""
+
+    # Collect all notes in that measure
+    notes_in_bar = []
+    for element in measure.recurse().notesAndRests:
+        if isinstance(element, music21.note.Note):
+            notes_in_bar.append(element)
+
+    if not notes_in_bar:
+        return ""
+
+    # Convert notes to pitch classes (0-11)
+    pitch_classes = set()
+    for note in notes_in_bar:
+        pitch_classes.add(note.pitch.midi % 12)
+
+    # Convert to a binary string form
+    binary_string_parts = []
+    for i in range(12):
+        binary_string_parts.append('1' if i in pitch_classes else '0')
+
+    # Format as '1000 1001 0001'
+    formatted_binary_string = "".join(binary_string_parts)
+    return f"{formatted_binary_string[0:4]} {formatted_binary_string[4:8]} {formatted_binary_string[8:12]}"
+
+def remove_chords_from_stream(a_song):
+    """
+    Makes a copy of a music21 stream and removes all chord symbols from it.
+
+    :param a_song: A music21 stream object (e.g., Score or Part).
+    :return: A new music21 stream object without chord symbols.
+    """
+    # 1. Make a deep copy to leave the original stream untouched.
+    song_copy = copy.deepcopy(a_song)
+
+    # 2. Find all chord symbol objects (ChordSymbol and NoChord) in the copied stream.
+    # The .flatten() method provides access to all elements in nested sub-streams.
+    # chords_to_remove = song_copy.flatten().getElementsByClass([
+    chords_to_remove = list(song_copy.flatten().getElementsByClass([
+        'ChordSymbol', 
+        'NoChord'
+    ]))
+
+    # 3. Remove the collected chord symbols from the stream copy.
+    # The recurse=True argument ensures removal from all parts and measures.
+    song_copy.remove(chords_to_remove, recurse=True)
+
+    return song_copy
+
+
+
+def update_filename_with_range(filename, first_note, last_note):
+    # Build replacement text
+    replacement = f"[{first_note}-{last_note}]"
+
+    # Split filename into stem + extension
+    stem, ext = os.path.splitext(filename)
+
+    # Look for bracketed content like [C4-G4], [foo], [123], etc.
+    if re.search(r"\[.*?\]", stem):
+        # Replace whatever is inside the brackets
+        new_stem = re.sub(r"\[.*?\]", replacement, stem)
+    else:
+        # Append the replacement
+        new_stem = stem + replacement
+
+    # Reassemble filename
+    return new_stem + ext
 
 def main():
     """
@@ -2927,12 +3603,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--mxlfile',
                         help='MusicXML input file with the extension .mxl (compressed) relative to current working directory.  '
-                            'Example 1: input/music/music.mxl (without placeholder chords, outputs files with placeholder chords at offsets beat1 beat2 bar1 bar2 bar4)'
-                            '   '
+                            'Example 1: input/music/music.mxl (without placeholder chords, outputs files with placeholder chords at offsets beat1 beat2 bar1 bar2 bar4) '
                             'Example 2: input/music/placeholder_chords/music.mxl (with placeholder chords, outputs a file with chords in placeholders for each input/style).  '
-                            'To manually add placeholders for where chords are desired, in MuseScore, to create a Chord Symbol: select start note and then use the menu option'
+                            'To manually add placeholders for where chords are desired, in MuseScore, to create a Chord Symbol: select start note and then use the menu option '
                             'Add > Text > Chord Symbol (shortcut Ctrl+K) e.g. C or the song key.',
-                        # default='input/music/music.mxl',
                         default='input/music/placeholder_chords/music.mxl',
                         type=str)
 
@@ -2942,67 +3616,178 @@ def main():
     #                     default='Krumhansl',
     #                     type=str)
 
+    parser.add_argument('-a', '--auto-transpose', 
+                        action='store_true',
+                        help='automatically transpose to optimal key for analysis (default: False)')
+
+    parser.add_argument('-b', '--bar-pitch-class', 
+                        metavar="BAR",
+                        type=positive_int, # <--- Use the custom validation function here
+                        help="Return the pitch classes for the given bar, >=1, of the melody.")
+    
     # BooleanOptionalAction needs Python 3.9
     # parser.add_argument('-d','--demo',
     #                    help='demonstrate some different commonly used chords and harmonic rhythms.',
     #                    default=False,
     #                    action=argparse.BooleanOptionalAction)
 
-    parser.add_argument('-c','--chord_choice', 
-                        help='chord_choice may be rank which uses a nearest-rank ordered list of possible chords '
-                            'or nth_outcome where number is the number of outcomes away from the most popular outcome, ',
-                        default= 'rank',
+    parser.add_argument('-c', '--chord_choice', 
+                        help='chord_choice may be rank which uses a nearest-rank ordered list of possible chords in a style; '
+                             'or nth_outcome where number is the number of outcomes away from the most popular outcome in a style; '
+                             'or infer which uses Pitch-class template–based chord inference where number is a randomness control from strict to creative.',
+                        default='rank',
                         type=Chord_Choice, choices=list(Chord_Choice))  
-                        
-    parser.add_argument('-n','--number',
-                        help='number used with the chord_choice e.g. '
-                            'if chord_choice is rank then number 1 is least frequent and 100 is the most frequent in the nearest-rank ordered list of possible chords, '
-                            'if chord_choice is nth_outcome then number is outcomes away from the most popular outcome. ',
-                        default= 100,
-                        type=int, 
-                        choices=range(0, 101))                          
-                    
-    parser.add_argument('-d','--demo',
+
+    parser.add_argument('-d', '--demo',
                         help='demonstrate some different commonly used chords and harmonic rhythms.',
                         default=False)
-    #                    action=argparse.BooleanOptionalAction)
-                        
-    parser.add_argument('-i','--instrument',
-                        help='medlody instrument default is Piano, alternatively enter one of: '
+
+    parser.add_argument('-f', '--out-format',
+                        help='output format: "mxl" for compressed .mxl or "musicxml" for uncompressed .musicxml',
+                        default='musicxml',
+                        choices=['mxl', 'musicxml'],
+                        type=str)
+
+    parser.add_argument('-i', '--instrument',
+                        help='melody instrument default is Piano, alternatively enter one of: '
                             'Accordion, "Acoustic Bass", "Acoustic Guitar", Alto, "Alto Saxophone", Banjo, Baritone, "Baritone Saxophone", Bass, Bassoon, "Bass Trombone", Brass, Celesta, Clarinet, Clavichord, Contrabass, Contrabassoon, '
                             'Dulcimer, "Electric Bass", "Electric Guitar", "Electric Piano", "English Horn", Flute, Glockenspiel, Guitar, Harmonica, Harp, Kalimba, Koto, Lute, Marimba, Oboe, Ocarina, "Pan Flute", Piccolo, Recorder, "Reed Organ", Saxophone, '
                             'Shamisen, Sitar, Soprano, "Soprano Saxophone", Tenor, "Tenor Saxophone", Timpani, Trombone, Trumpet, Tuba, "Tubular Bells", Ukulele, Vibraphone, Violin, Violoncello, Voice, Xylophone',
                         default='Piano',
                         type=str)                               
-    
-    parser.add_argument('-o','--offsets',
-                        nargs=5,
-                        metavar=('beat1', 'beat2', 'bar1', 'bar2', 'bar4'),
-                        help='override the offset increments for beat1, beat2, bar1, bar2, bar4 e.g. -o 0.5 1.0 1.5 2.0 3.0',
-                        default=None,
-                        type=float)
 
-    parser.add_argument('-s','--style',
+    parser.add_argument('-n', '--number',
+                        help='number used with the chord_choice e.g. '
+                        'if chord_choice is rank then number 100 is the most frequent and  1 is least frequent in the nearest-rank ordered list of possible chords. [100-75] recommended rank number;   '
+                        'if chord_choice is nth_outcome then number 0 is most popular, 1 is next outcome after the most popular outcome etc. At then end of outcomes the choice loops back to the most popular. [0-3] recommended nth_outcome number;   '
+                        'if chord_choice is infer then number 0 is deterministic choosing the highest score, 100 is the weakest valid match among valid chords.',                        default=100,
+                        type=int, 
+                        choices=range(0, 101))
+    
+    parser.add_argument('-p', '--pitch_class',
+                        help='pitch class in binary format e.g. "1000 0000 0000" to lookup chord for that pitch class. Must be used with -s/--style flag. Prints the chord and exits.',
+                        default=None,
+                        type=str)
+    
+    parser.add_argument('-s', '--style',
                         help='style filter string on files in input/style directory e.g. -s jazz only includes style names containing the string jazz',
                         default='ptc',
                         type=str)
 
-    parser.add_argument('-t','--transpose',
+    parser.add_argument('-t', '--transpose',
                         help='transpose input file down or up t semitones (to override default "analyze" transpose to C / a minor)',
-                        default= None,
+                        default=None,
                         type=int, choices=range(-12, 13))
 
-    parser.add_argument('-v','--version', action='version',
+    parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s {version}'.format(version=__version__))
 
-
-                      
-                        
     # Parse command line arguments.
     args = parser.parse_args()
+
+    # Print all arguments
+    print("All argument values:")
+    for arg in vars(args):
+        print(f"  {arg}: {getattr(args, arg)}")
+    # input('Press Enter to continue...')
+
+    # Validate chord_choice and number combination
+    if args.chord_choice == Chord_Choice.RANK and args.number < 1:
+        print('exit: Error chord_choice is rank but number < 1')
+        print('For rank, number must be >= 1 (1=least frequent, 100=most frequent)')
+        sys.exit(1)
+
+    # set global output format
+    global OUTPUT_FORMAT
+    OUTPUT_FORMAT = args.out_format
+
     print('')
     print('VeeHarmGen - Vertical Harmony Generator v', __version__)
     print('')
+
+    print("args.bar_pitch_class", args.bar_pitch_class)
+    if args.bar_pitch_class is not None:
+        if args.mxlfile is None:
+            print("Error: --mxlfile argument is required.")
+            parser.print_help()
+            sys.exit(1)
+        print("Input file fully qualified      :", args.mxlfile)
+
+        pitch_class = get_pitch_class_for_bar_in_musicxml(args.bar_pitch_class, args.mxlfile)
+        # In a real implementation, you would extract the pitch class from the specified bar.
+        print("Pitch classes for bar", args.bar_pitch_class, ":", pitch_class)
+                # Display pitches in the pitch class
+        pitches = display_pitches_in_pitch_class(pitch_class)
+        print(f'Pitches in pitch class: {pitches}')
+        sys.exit(0)
+
+    # Handle pitch_class lookup mode
+    if args.pitch_class is not None:
+        print(f'Pitch class lookup mode: {args.pitch_class}')
+        
+        # Display pitches in the pitch class
+        pitches = display_pitches_in_pitch_class(args.pitch_class)
+        print(f'Pitches in pitch class: {pitches}')
+        
+        pitch_to_chord_files = [f for f in os.listdir(INPUT_STYLE_PATH) if f.endswith('.json')]
+        print('')
+        print(f'Looking for style containing: {args.style}')
+        
+        found_match = False
+        for pitch_to_chord_file in pitch_to_chord_files:
+            if args.style in pitch_to_chord_file:
+                found_match = True
+                input_pitch_to_chord_fully_qualified = INPUT_STYLE_PATH + pitch_to_chord_file
+                print(f'Loading: {input_pitch_to_chord_fully_qualified}')
+                
+                pitch_to_chord = load_json(input_pitch_to_chord_fully_qualified)
+                
+                try:
+                    # chord chosen by rank (existing behaviour)
+                    chord_rank = get_chord_for_pitch_class(
+                        args.pitch_class,
+                        pitch_to_chord,
+                        pitch_to_chord_file,
+                        Chord_Choice.RANK,
+                        args.number
+                    )
+                    # also show chord for nth_outcome (example with number=0)
+                    chord_nth0 = get_chord_for_pitch_class(
+                        args.pitch_class,
+                        pitch_to_chord,
+                        pitch_to_chord_file,
+                        Chord_Choice.NTH_OUTCOME,
+                        args.number
+                    )
+
+                    print('')
+                    print(f'Pitch class: {args.pitch_class}')
+                    print(f'Pitches: {pitches}')
+                    print(f'Chord (RANK): {chord_rank}')
+                    print(f'Chord (NTH_OUTCOME): {chord_nth0}')
+                except Exception as e:
+                    print(f'Error looking up pitch class: {e}')
+                    sys.exit(1)
+                
+                # --- Moved this block here, AFTER chord outputs ---
+                print('')
+                # Also show best-fitting chords to these melody notes
+                best = best_chords(pitches, top_n=8)
+                if best:
+                    print('Infer best-fitting chords for these pitches:')
+                    for chord_name, score, matches in best:
+                        matches_names = ', '.join(PC_TO_NOTE[m] for m in matches)
+                        print(f'  {chord_name:8} score={score:.2f} matches={matches_names}')
+                else:
+                    print('No matching chords found for these pitches.')
+                # -------------------------------------------------
+
+                sys.exit(0)
+        
+        if not found_match:
+            print(f'No style file found containing: {args.style}')
+            sys.exit(1)
+
     print('It is assumed that the input file contains one melody with one key and one time signature.')
     print('')
     print('In MuseScore to create placeholder chords')
@@ -3027,7 +3812,11 @@ def main():
     print("Output instrument:", args.instrument)
 
     # offsets
-    SongSectionValues.offsets = args.offsets
+    # SongSectionValues.offsets = args.offsets
+    # If `offsets` was an old feature or not actually required, then modify the line:
+    # to safely handle the case where it doesn’t exist:
+    SongSectionValues.offsets = getattr(args, "offsets", [0.0])
+
     if SongSectionValues.offsets != None:
         print('offsets : -o',SongSectionValues.offsets)
 
@@ -3047,16 +3836,20 @@ def main():
         # transpose with supplied
         transposed_song = raw_song.transpose(SongSectionValues.transpose)
     else:
-        # use analyze transpose
+        # use analyze
+        if args.auto_transpose:
+            the_interval = get_transpose_information('raw input file', raw_song)
+            transposed_song = raw_song.transpose(the_interval)
 
-        the_interval = get_transpose_information('raw input file', raw_song)
-        transposed_song = raw_song.transpose(the_interval)
-
-    the_interval2 = get_transpose_information('transposed after analysis', transposed_song)
-
+            the_interval2 = get_transpose_information('transposed after analysis', transposed_song)
+        else:
+            # FIX HERE: No transposition requested → use raw_song
+            transposed_song = raw_song
+    
     # remove file extension from filename, normalise filename and add file extension
     mxlfile_basename = os.path.basename(args.mxlfile)
-    mxlfile_normalised_name = os.path.splitext(mxlfile_basename)[0] + '_transposed.mxl'
+    mxlfile_normalised_name = os.path.splitext(mxlfile_basename)[0] + f'_transposed.{OUTPUT_FORMAT}'
+    # mxlfile_normalised_name = os.path.splitext(mxlfile_basename)[0] + '_transposed.mxl'
 
     # get path without filename e.g.
     # 1. blank if no path (file in cwd) mxlfile_path               :
@@ -3069,15 +3862,49 @@ def main():
     # Handle a file without sections by adding one on the first note
     if not has_section(transposed_song):
         print('No section found then add intro section name on beat 1.')
-        transposed_song = add_TextExpression(transposed_song)
+        transposed_song = add_RehearsalMark(transposed_song)
 
-    a_song = normalise_song(transposed_song, mxlfile_normalised_name)
-    the_interval3 = get_transpose_information('normalised_song_from_analysis', a_song)
+    # a_song = normalise_song(transposed_song, mxlfile_normalised_name)
+    # the_interval3 = get_transpose_information('normalised_song_from_analysis', a_song)
 
+    # song_key = a_song.analyze('key')
+
+    # --- Only normalise if auto-transpose was explicitly requested ---
+    if args.auto_transpose:
+        print("Auto-transpose enabled → normalising stream...")
+        a_song = normalise_song(transposed_song, mxlfile_normalised_name)
+        the_interval3 = get_transpose_information('normalised_song_from_analysis', a_song)
+    else:
+        print("Auto-transpose disabled → NOT normalising stream.")
+        a_song = transposed_song
+        the_interval3 = get_transpose_information('post-transpose (no normalisation)', a_song)
+
+    # Continue normally
     song_key = a_song.analyze('key')
 
-    # write normalised stream
-    a_song.write(fp=mxlfile_normalised_name_path) # write normalised score to musicxml file
+    # Only create transposed placeholder files if auto-transpose IS enabled ---
+    if args.auto_transpose:
+        print("Auto-transpose enabled → write mxlfile_normalised_name_path, song_without_chords midi.")
+
+        first_note, last_note = get_first_last_note_names(a_song)
+        #mxlfile_normalised_name_path = update_filename_with_range(mxlfile_normalised_name_path, first_note, last_note)
+
+        # write normalised stream
+        a_song.write(OUTPUT_FORMAT, fp=mxlfile_normalised_name_path) # write normalised score to musicxml file
+
+        # write midi melody e.g. for using in JJazzLab
+        midifile_normalised_name = os.path.splitext(mxlfile_basename)[0] + f'_transposed.mid'
+        midifile_normalised_name_path = os.curdir + os.sep + mxlfile_path + os.sep + midifile_normalised_name
+        # Call the function to get a copy without chords
+        song_without_chords = remove_chords_from_stream(a_song)
+
+        first_note, last_note = get_first_last_note_names(song_without_chords)
+        #midifile_normalised_name_path = update_filename_with_range(midifile_normalised_name_path, first_note, last_note)
+
+        song_without_chords.write("midi", fp=midifile_normalised_name_path)
+
+    else:
+        print("Auto-transpose disabled ? NOT creating placeholder .musicxml or .mid files.")
 
     print('Reading mxlfile_normalised...')
     print('Looking for sections: intro, verse, prechorus, chorus, solo, bridge, or outro... ')
@@ -3087,7 +3914,7 @@ def main():
 
     analysis_list = [
         'Aarden',
-        'Bellman',
+               'Bellman',
         'Krumhansl',
         'Simple',
         'Temperley',
@@ -3103,6 +3930,7 @@ def main():
         if has_chord_symbols(a_song):
             print('    if has_chord_symbols')
             print('        input music has placeholder chords ......................................................................')
+           
             print('')
 
             generate_from_placeholder_chords(a_song, song_key, args.instrument, mxlfile_basename, args.chord_choice, args.number, args.style)
@@ -3125,6 +3953,7 @@ def main():
             song_section_values.set_analyze_choice(analysis_choice)
             song_section_values.set_instrument(args.instrument)
             print('song_section_values.analyze_choice', song_section_values.analyze_choice)
+           
             # for each element in stream
             for n in a_song.flatten():
 
@@ -3133,8 +3962,12 @@ def main():
                         song_section_values.set_time_sig(n)
                         first_TimeSig = False
 
-                if type(n) == music21.expressions.TextExpression:
-                    # print('music21.expressions.TextExpression')
+
+
+               
+
+                if type(n) == music21.expressions.RehearsalMark:
+                    # print('music21.expressions.RehearsalMark')
                     if is_section(n.content):
                         first_note_of_section = True
                         if first_section_found:
@@ -3164,152 +3997,6 @@ def main():
                 print('')
                 print(
                     'Warning: Error number_of_sections_found = 0 ##########################################################')
-                print('')
-                print('MusicXML files are .mxl for compressed files')
-                print('The MusicXML melody file must contain staff text words to identify the section start point: ')
-                print('intro, verse, prechorus, chorus, solo, bridge or outro. ')
-                print(
-                    'In MuseScore, to create staff text choose a location by selecting a note or rest and then use the menu option Add > Text > Staff Text, or use the shortcut Ctrl+T.')
-
-            else:
-                # at end of song strip final comma and add }
-                SongSectionValues.song_offset_chord_1_beat = remove_suffix(SongSectionValues.song_offset_chord_1_beat, ',') + '}'
-                SongSectionValues.song_offset_chord_2_beat = remove_suffix(SongSectionValues.song_offset_chord_2_beat, ',') + '}'
-                SongSectionValues.song_offset_chord_1_bar = remove_suffix(SongSectionValues.song_offset_chord_1_bar, ',') + '}'
-                SongSectionValues.song_offset_chord_2_bar = remove_suffix(SongSectionValues.song_offset_chord_2_bar, ',') + '}'
-                SongSectionValues.song_offset_chord_4_bar = remove_suffix(SongSectionValues.song_offset_chord_4_bar, ',') + '}'
-
-                song_section_values.print_class_variable()
-
-                try:
-                    SongSectionValues.song_offset_chord_1_beat = ast.literal_eval(SongSectionValues.song_offset_chord_1_beat)
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    print('exit: Error song_offset_chord_1_beat', SongSectionValues.song_offset_chord_1_beat)
-                    sys.exit()
-
-                try:
-                    SongSectionValues.song_offset_chord_2_beat = ast.literal_eval(SongSectionValues.song_offset_chord_2_beat)
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    print('exit: Error song_offset_chord_2_beat', SongSectionValues.song_offset_chord_2_beat)
-                    sys.exit()
-
-                try:
-                    SongSectionValues.song_offset_chord_1_bar = ast.literal_eval(
-                        SongSectionValues.song_offset_chord_1_bar)
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    print('exit: Error song_offset_chord_1_bar', SongSectionValues.song_offset_chord_1_bar)
-                    sys.exit()
-
-                try:
-                    SongSectionValues.song_offset_chord_2_bar = ast.literal_eval(SongSectionValues.song_offset_chord_2_bar)
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    print('exit: Error song_offset_chord_2_bar', SongSectionValues.song_offset_chord_2_bar)
-                    sys.exit()
-
-                try:
-                    SongSectionValues.song_offset_chord_4_bar = ast.literal_eval(SongSectionValues.song_offset_chord_4_bar)
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
-                    print('exit: Error song_offset_chord_4_bar', SongSectionValues.song_offset_chord_4_bar)
-                    sys.exit()
-
-                # append to lists of the key finder offset chord dictionaries
-                SongSectionValues.key_finder_offset_chords_1_beat.append(SongSectionValues.song_offset_chord_1_beat)
-                SongSectionValues.key_finder_offset_chords_2_beat.append(SongSectionValues.song_offset_chord_2_beat)
-                SongSectionValues.key_finder_offset_chords_1_bar.append(SongSectionValues.song_offset_chord_1_bar)
-                SongSectionValues.key_finder_offset_chords_2_bar.append(SongSectionValues.song_offset_chord_2_bar)
-                SongSectionValues.key_finder_offset_chords_4_bar.append(SongSectionValues.song_offset_chord_4_bar)
-
-                # dt = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S_%f")
-                dt = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-                print('')
-
-            # produce chord output
-            print('produce chord output with placeholder chords 1 per bar ON_KEY_MOST')
-            chord_output = Chord_Output.ON_KEY_MOST
-
-            # harmonic_rhythm = Harmonic_Rhythm.BAR1
-            for harmonic_rhythm in Harmonic_Rhythm:  # e.g. BEAT1, BEAT2, BAR1 etc
-
-                output_filename = os.path.splitext(mxlfile_basename)[0]
-                # output_filename = output_filename + '-' + str(chord_output.value) + '-' + chord_output.name + '-' + harmonic_rhythm.name + '-' + dt + '.mxl'
-                # output_filename = output_filename + '-chord' + '.mxl'
-                output_filename = output_filename + '-' + harmonic_rhythm.name + '.mxl'
-
-                print('song_title, output_filename',mxlfile_basename, output_filename)
-
-                offset_chord = get_offset_chord(chord_output, harmonic_rhythm)
-                # print('offset_chord', offset_chord)
-                SongSectionValues.last_bass = 'C'
-                song_section_values.write_chords(mxlfile_basename, offset_chord, output_filename)
-
-            print('')
-            print('Now in Musescore, open output file', output_filename)
-            print('This may be manually edited to add or remove placeholder chords.')
-            print('')
-            print('To enter a chord symbol:')
-            print('     Select a start note or rest; Press Ctrl + K (Mac: Cmd + K );')
-            print('     Enter chord symbol e.g. C  Exit chord symbol mode by pressing Esc.')
-            print('')
-
-
-    else: # demonstrate the different types of chords
-        print('demonstrate the different types of chords')
-        for analysis_choice in chosen_analysis:
-            print('analysis_choice', analysis_choice)
-
-            found_time_signature = False
-            first_section_found = False
-            first_note_of_section = True
-            first_TimeSig = True
-            songTimeSig = None
-
-            song_section_values = SongSectionValues(song_key, a_song)
-            song_section_values.set_analyze_choice(analysis_choice)
-            song_section_values.set_instrument(args.instrument)
-            print('song_section_values.analyze_choice',song_section_values.analyze_choice)
-            # for each element in stream
-            for n in a_song.flatten():
-
-                if type(n) == music21.meter.TimeSignature:
-                    if first_TimeSig:
-                        song_section_values.set_time_sig(n)
-                        first_TimeSig = False
-
-                if type(n) == music21.expressions.TextExpression:
-                    # print('music21.expressions.TextExpression')
-                    if is_section(n.content):
-                        first_note_of_section = True
-                        if first_section_found:
-                            song_section_values.print()
-
-                        # song_section_values = SongSectionValues(song_key, a_song)
-
-                        song_section_values.set_section(n.content)
-
-                        if not first_section_found:
-                            first_section_found = True
-
-                # if note: update song_section_values
-                if type(n) == music21.note.Note:
-                    # if type(n) != music21.note.Rest:
-                    song_section_values.update(n, first_note_of_section)
-                    if first_note_of_section == True: first_note_of_section = False
-
-                if type(n) == music21.note.Rest:
-                    song_section_values.update_rest(n)
-
-            # print data for last section
-            if first_section_found:
-                song_section_values.print()
-            # if (number_of_sections_found) == 0:
-            if not first_section_found:
-                print('')
-                print('Warning: Error number_of_sections_found = 0 ##########################################################')
                 print('')
                 print('MusicXML files are .mxl for compressed files')
                 print('The MusicXML melody file must contain staff text words to identify the section start point: ')
@@ -3365,7 +4052,7 @@ def main():
                     print('exit: Error song_offset_chord_4_bar', SongSectionValues.song_offset_chord_4_bar)
                     sys.exit()
 
-                # append to lists of the key finder offset chord dictionaries for each harmonic rhythm
+                # append to lists of the key finder offset chord dictionaries
                 SongSectionValues.key_finder_offset_chords_1_beat.append(SongSectionValues.song_offset_chord_1_beat)
                 SongSectionValues.key_finder_offset_chords_2_beat.append(SongSectionValues.song_offset_chord_2_beat)
                 SongSectionValues.key_finder_offset_chords_1_bar.append(SongSectionValues.song_offset_chord_1_bar)
@@ -3377,59 +4064,33 @@ def main():
                 # dt = datetime.datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
                 print('')
 
-                output_filename = os.path.splitext(mxlfile_basename)[
-                                      0] + '-' + analysis_choice + '-' + 'chords_1_beat' + '.mxl'
+            # produce chord output
+            print('produce chord output with placeholder chords 1 per bar ON_KEY_MOST')
+            chord_output = Chord_Output.ON_KEY_MOST
 
-                # Do not write key finder chords (Aarden ... Simple etc) to file as they have not been filtered for on key
+            # harmonic_rhythm = Harmonic_Rhythm.BAR1
+            for harmonic_rhythm in Harmonic_Rhythm:  # e.g. BEAT1, BEAT2, BAR1 etc
 
-                output_filename = os.path.splitext(mxlfile_basename)[
-                                      0] + '-' + analysis_choice + '-' + 'chords_2_beat' + '.mxl'
-                # song_section_values.write_chords(mxlfile_basename, song_section_values.song_offset_chord_2_beat, output_filename)
-
-                output_filename = os.path.splitext(mxlfile_basename)[
-                                      0] + '-' + analysis_choice + '-' + 'chords_bar_1' + '.mxl'
-
-                # song_section_values.write_chords(mxlfile_basename, song_section_values.song_offset_chord_1_bar, output_filename)
-
-                output_filename = os.path.splitext(mxlfile_basename)[
-                                      0] + '-' + analysis_choice + '-' + 'chords_bar_2' + '.mxl'
-
-                # song_section_values.write_chords(mxlfile_basename, song_section_values.song_offset_chord_2_bar, output_filename)
-
-                output_filename = os.path.splitext(mxlfile_basename)[
-                                      0] + '-' + analysis_choice + '-' + 'chords_bar_4'  + '.mxl'
-                # song_section_values.write_chords(mxlfile_basename, song_section_values.song_offset_chord_4_bar, output_filename)
-
-                print('')
-
-        # produce chord output
-        for chord_output in Chord_Output: # e.g. on_key, major, minor etc.
-            # print('chord_output, name, value =',chord_output, chord_output.name, chord_output.value )
-            for harmonic_rhythm in Harmonic_Rhythm:     # e.g. BEAT1, BEAT2, BAR1 etc
-                # print('chord_output.name, harmonic_rhythm.name =', chord_output.name, harmonic_rhythm.name )
                 output_filename = os.path.splitext(mxlfile_basename)[0]
                 # output_filename = output_filename + '-' + str(chord_output.value) + '-' + chord_output.name + '-' + harmonic_rhythm.name + '-' + dt + '.mxl'
-                output_filename = output_filename + '-' + str(chord_output.value) + '-' + chord_output.name + '-' + harmonic_rhythm.name + '.mxl'
+                # output_filename = output_filename + '-chord' + '.mxl'
+                output_filename = output_filename + '-' + harmonic_rhythm.name + f'.{OUTPUT_FORMAT}'
 
-                # print('song_title, output_filename',mxlfile_basename, output_filename)
+                print('song_title, output_filename',mxlfile_basename, output_filename)
+
                 offset_chord = get_offset_chord(chord_output, harmonic_rhythm)
                 # print('offset_chord', offset_chord)
                 SongSectionValues.last_bass = 'C'
                 song_section_values.write_chords(mxlfile_basename, offset_chord, output_filename)
 
-        print('')
-        print('Now in Musescore, open desired output files, play and choose favourite file.')
-        print('This may be manually edited to add or substitute other chords from other output files.')
-        print('')
-        print('In your favourite file:')
-        print('To edit a chord symbol double click on it.')
-        print('To enter a chord symbol:')
-        print('     Select a start note or rest; Press Ctrl + K (Mac: Cmd + K );')
-        print('     Enter chord symbol e.g. Am7. Exit chord symbol mode by pressing Esc.')
-        print('')
-
-    print('VeeHarmGen - Vertical Harmony Generator v', __version__)
-
+            print('')
+            print('Now in Musescore, open output file', output_filename)
+            print('This may be manually edited to add or remove placeholder chords.')
+            print('')
+            print('To enter a chord symbol:')
+            print('     Select a start note or rest; Press Ctrl + K (Mac: Cmd + K );')
+            print('     Enter chord symbol e.g. C  Exit chord symbol mode by pressing Esc.')
+            print('')
 
 if __name__ == '__main__':
 

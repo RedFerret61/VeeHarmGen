@@ -1,9 +1,13 @@
-# VeeHarmGen 3.0.0
+# VeeHarmGen
+This tool is part of the MarkMelGen ecosystem / toolchain and is part of the latest [MarkMelGen release](https://github.com/RedFerret61/MarkMelGen/releases).
+
 VeeHarmGen adds chords to a melody using various pop, jazz and classical chord style files. It is a **Ve**rtical **Harm**ony **Gen**eration program that 
 takes an **input** musicxml file containing a **melody** and placeholder chord symbols (temporary chords that give a harmonic rhythm) and
 creates **output** musicxml files with more elaborate or (hopefully) fitting **Chord Symbols**.
 These can be played back and edited in scorewriter programs
 such as MuseScore 3.6.2.
+
+![VeeHarmGen logo](assets/images/mmg_logo_1.png)
 
 There is a VeeHarmGen 3 demonstration video on youtube: https://youtu.be/Be0aRNpcL7k 
 [![Vertical Harmony Generator 3 - more chord outcomes](assets/images/youtube3.png)](https://youtu.be/Be0aRNpcL7k "Vertical Harmony Generator 3 - more chord outcomes !")
@@ -19,13 +23,63 @@ The latest release has been tested on:
 - Ubuntu 22.04.3 LTS with 
   - MuseScore 3.2.3,    Python 3.10.12,  music21 v 9.1.0
 
-Note: MuseScore 4.0.2 has chord symbol display bug, Format Style, Chord Symbols, toggle to Jazz then back to standard.
+## VeeHarmGen Command-line Usage
+
+    $ VeeHarmGen.py -h
+    usage: VeeHarmGen.py [-h] [-m MXLFILE] [-a] [-b BAR] [-c {rank,nth_outcome,infer}] [-d DEMO] [-f {mxl,musicxml}] [-i INSTRUMENT]
+                        [-n {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100}]
+                        [-p PITCH_CLASS] [-s STYLE] [-t {-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12}] [-v]
+
+    options:
+    -h, --help            show this help message and exit
+    -m, --mxlfile MXLFILE
+                            MusicXML input file with the extension .mxl (compressed) relative to current working directory. Example 1:
+                            input/music/music.mxl (without placeholder chords, outputs files with placeholder chords at offsets beat1
+                            beat2 bar1 bar2 bar4) Example 2: input/music/placeholder_chords/music.mxl (with placeholder chords, outputs
+                            a file with chords in placeholders for each input/style). To manually add placeholders for where chords are
+                            desired, in MuseScore, to create a Chord Symbol: select start note and then use the menu option Add > Text
+                            > Chord Symbol (shortcut Ctrl+K) e.g. C or the song key.
+    -a, --auto-transpose  automatically transpose to optimal key for analysis (default: False)
+    -b, --bar-pitch-class BAR
+                            Return the pitch classes for the given bar, >=1, of the melody.
+    -c, --chord_choice {rank,nth_outcome,infer}
+                            chord_choice may be rank which uses a nearest-rank ordered list of possible chords in a style; or
+                            nth_outcome where number is the number of outcomes away from the most popular outcome in a style; or infer
+                            which uses Pitch-class template–based chord inference where number is a randomness control from strict to
+                            creative.
+    -d, --demo DEMO       demonstrate some different commonly used chords and harmonic rhythms.
+    -f, --out-format {mxl,musicxml}
+                            output format: "mxl" for compressed .mxl or "musicxml" for uncompressed .musicxml
+    -i, --instrument INSTRUMENT
+                            melody instrument default is Piano, alternatively enter one of: Accordion, "Acoustic Bass", "Acoustic
+                            Guitar", Alto, "Alto Saxophone", Banjo, Baritone, "Baritone Saxophone", Bass, Bassoon, "Bass Trombone",
+                            Brass, Celesta, Clarinet, Clavichord, Contrabass, Contrabassoon, Dulcimer, "Electric Bass", "Electric
+                            Guitar", "Electric Piano", "English Horn", Flute, Glockenspiel, Guitar, Harmonica, Harp, Kalimba, Koto,
+                            Lute, Marimba, Oboe, Ocarina, "Pan Flute", Piccolo, Recorder, "Reed Organ", Saxophone, Shamisen, Sitar,
+                            Soprano, "Soprano Saxophone", Tenor, "Tenor Saxophone", Timpani, Trombone, Trumpet, Tuba, "Tubular Bells",
+                            Ukulele, Vibraphone, Violin, Violoncello, Voice, Xylophone
+    -n, --number {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100}
+                            number used with the chord_choice e.g. if chord_choice is rank then number 100 is the most frequent and 1
+                            is least frequent in the nearest-rank ordered list of possible chords. [100-75] recommended rank number; if
+                            chord_choice is nth_outcome then number 0 is most popular, 1 is next outcome after the most popular outcome
+                            etc. At then end of outcomes the choice loops back to the most popular. [0-3] recommended nth_outcome
+                            number; if chord_choice is infer then number 0 is deterministic choosing the highest score, 100 is the
+                            weakest valid match among valid chords.
+    -p, --pitch_class PITCH_CLASS
+                            pitch class in binary format e.g. "1000 0000 0000" to lookup chord for that pitch class. Must be used with
+                            -s/--style flag. Prints the chord and exits.
+    -s, --style STYLE     style filter string on files in input/style directory e.g. -s jazz only includes style names containing the
+                            string jazz
+    -t, --transpose {-12,-11,-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12}
+                            transpose input file down or up t semitones (to override default "analyze" transpose to C / a minor)
+    -v, --version         show program's version number and exit
 
 **Table of Contents**
 
 - [Changes](#Changes)
 - [QuickStart](#QuickStart)
 - [Introduction](#Introduction)
+- [AlternativeChords](#AlternativeChords)
 - [StylesEvaluation](#StylesEvaluation)
 - [Prerequisites](#Prerequisites)
 - [WindowsInstall](#WindowsInstall)
@@ -40,6 +94,7 @@ Note: MuseScore 4.0.2 has chord symbol display bug, Format Style, Chord Symbols,
 ---
 ## Changes
 
+- v3.1.0 2025. Add a chord_choice of infer and alternative chords help. 
 - v3.0.0 2024. Add more chord styles, style evaluation in Introduction and a chord_choice of nth_outcome away from the most popular chord outcome.
 - v2.0.0 2023. Add chord styles and a chord_choice of rank which uses a nearest-rank ordered list of possible chords.
 - v1.0.0 2022. Initial version uses key analysis on input music melody slices to produce chords.
@@ -130,6 +185,32 @@ VeeHarmGen version 3 added more chord styles (Classical, Film and Game), a style
 	   run_out 2 pop_country_1 Violin input/music/placeholder_chords/Cairo-PC.mxl
        run_out 3 all_contemporary Piano input/music/placeholder_chords/Cairo-PC.mxl
 
+## AlternativeChords
+If you need help with choosing alternative chords, use the flags:
+
+    -b, --bar-pitch-class BAR
+    -p, --pitch_class PITCH_CLASS
+
+e.g.
+
+    cd VeeHarmGen
+    python VeeHarmGen.py -b 12 -m output\soft_rock_0--Whisper_on_the_Wind-C-bpm90-ts3_4-D3_C6-wpch-soft_rock_0-nth-1-v01.musicxml
+
+        Pitch classes for bar 12 : 0000 0000 0001
+        Pitches in pitch class: ['B']
+
+    python VeeHarmGen.py -p "0000 0000 0001" -c nth_outcome -n 0 -s soft_rock
+
+        number is 0
+        ...
+        chord_choice is nth_outcome
+        get_chord_from_pitch_to_chord_by_nth_outcome(number, v) 0 {'Am': 1, 'Fmaj7': 2, 'F': 1}
+        sorted_v_len 3
+        iter_num, ch, ch_preferred, sorted_items 0 Fmaj7 Fmaj7 {'Fmaj7': 2, 'F': 1, 'Am': 1}
+        nth_outcome ch is Fmaj7
+
+Try one of the listed chords as an alternative chord instead.
+
 ## StylesEvaluation 
 	
 | - | - | - |
@@ -162,8 +243,8 @@ VeeHarmGen version 3 added more chord styles (Classical, Film and Game), a style
 | film_3								| | :  Multifaceted, Tonal Ambiguity, blurs the lines between major and minor tonalities, modal shifts, chromaticism, unconventional voicings, extensions, minor second interval progressions, augmented chords, and open-fifth voicings, some sus2 / sus / dim / power / 6 / 7 / 9. |
 | folk_1								| | : Mostly simple, diatonic chord progressions, later chromaticism, modal interchange, and secondary dominants, some surprising bass, sus4, 7 / 9. |
 | folk_rock_1							| | :  Modal harmony and folk-inspired chords, such as IV-V-I (resolution) and vi-IV-I (melancholy) progressions, extended chords and non-diatonic chords, some sus2 / 6 / 7 (#3)(#5) / 9 / 11 / dim.|
-| games_1								| | : Multifaceted and adaptable, tonal with chromaticism, secondary dominants, and altered dominants to build tension and suspense, while major seventh chords and sus4 chords add warmth and hope, some sus2 / sus / dim / 7 / 9 / 11. |
-| games_2								| | : Primarily tonal, subtle chromaticism, modal shifts, altered dominants, some sus2 / sus / dim / 7 / 9 / 11. |
+| game_1								| | : Multifaceted and adaptable, tonal with chromaticism, secondary dominants, and altered dominants to build tension and suspense, while major seventh chords and sus4 chords add warmth and hope, some sus2 / sus / dim / 7 / 9 / 11. |
+| game_2								| | : Primarily tonal, subtle chromaticism, modal shifts, altered dominants, some sus2 / sus / dim / 7 / 9 / 11. |
 | glam_rock_1							| | : Relatively “classical” rock, pop, and gospel, often shifting between major and minor keys, slash chords (bass note from a different chord), chromatic passing chords, some sus4, 7. |
 | indie_rock_1							| | : Sourced from 60s British pop, punk rock, and even classical music, used minor chords for a melancholic and introspective atmosphere, or dramatic shifts from minor to major, some Modal Interchange for tension and release (borrowing chords from the parallel major or modal scales), some sus / 6 / 7 / 9.|
 | jazz_related_1					| | : Blues Influenced, with jazz traditions, Chromatic Harmony (secondary dominant, and substitution chords), some sus / 6 / (many) (aug) (dim) 7 (#5) (b5) (b9) / 9 (sus4) / 13 /aug / dim. | 

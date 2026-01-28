@@ -25,6 +25,7 @@ PITCH_TO_CHORD_FILENAME_ENDING = PITCH_TO_CHORD_PRE_EXTENSION + JSON_EXTENSION
 class Chord_Choice(Enum):
     RANK = 'rank'
     NTH_OUTCOME = 'nth_outcome'
+    INFER = 'infer'
     
     def __str__(self):
         return self.value
